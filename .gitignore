@@ -10,11 +10,17 @@ __pycache__/
 *.png
 *.md
 data/input/files/*
+!data/input/files/.gitkeep
 data/input/images/*
+!data/input/images/.gitkeep
 data/input/screenshots/*
+!data/input/screenshots/.gitkeep
 data/input/text/*
+!data/input/text/.gitkeep
 data/input/videos/*
+!data/input/videos/.gitkeep
 data/output/json/*
+!data/output/json/.gitkeep
 .ipynb_checkpoints/
 *.log
 .env
