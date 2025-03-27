@@ -64,8 +64,7 @@ def save_report(report: Dict[str, Any], filename: str, output_dir: str = config.
     
     # 只保存词向量数据
     vector_data = {
-        "text_embedding": report.get("text_embedding"),
-        "image_embedding": report.get("image_embedding")
+        "embedding": report.get("embedding")
     }
     
     try:
@@ -95,10 +94,9 @@ def process_file(file_item: Dict[str, str], analyzer: DarknetAnalyzer,
     
     logger.info(f"开始处理文件：{filename}")
     
-    # 只生成词向量
     vectors = analyzer.analyze(content, image_path)
-    
     save_report(vectors, filename, output_dir)
+
     return True
 
 async def save_content(content, url, content_type):

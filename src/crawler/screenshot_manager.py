@@ -242,7 +242,7 @@ class ScreenshotManager:
             with open(path, "wb") as f:
                 f.write(screenshot)
             
-            logger.info("截图已保存: %s", path)
+            logger.info("[截图] 已保存: %s", path)
             return True
             
         except WebDriverException as e:
