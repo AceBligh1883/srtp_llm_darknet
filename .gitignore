@@ -25,3 +25,4 @@ data/output/json/*
 *.log
 .env
 .venv/
+1.py
