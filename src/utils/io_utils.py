@@ -9,10 +9,12 @@ import aiofiles
 from typing import List, Dict, Any
 from datetime import datetime
 from urllib.parse import urlparse
-
 from src.logger import logger
 from config import config
 from src.analyzer.content_analyzer import DarknetAnalyzer
+from src.utils.storage_manager import StorageManager
+
+storage = StorageManager(config.DB_PATH)
 
 def load_texts(directory: str = config.TEXT_DIR, min_length: int = config.MIN_TEXT_LENGTH) -> List[Dict[str, str]]:
     """
@@ -101,44 +103,17 @@ def process_file(file_item: Dict[str, str], analyzer: DarknetAnalyzer,
 
 async def save_content(content, url, content_type):
     """
-    保存各种类型的内容到对应目录
+    使用存储管理器保存内容
     
     :param content: 要保存的内容
     :param url: 内容来源URL
     :param content_type: 内容类型 (text, screenshot, image, video, file)
     """
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    parsed = urlparse(url)
-    base = f"{timestamp}_{parsed.netloc}_{hash(url) % 10000}"
+    if isinstance(content, str):
+        content = content.encode('utf-8')
     
-    if content_type == "text":
-        filename = f"{base}.txt"
-        path = os.path.join(config.TEXT_DIR, filename)
-        try:
-            async with aiofiles.open(path, "w", encoding="utf-8") as f:
-                await f.write(content)
-            logger.info(f"[文本] 已保存至: {path}")
-        except Exception as e:
-            logger.error(f"保存文本失败: {e}")
-    elif content_type in ["screenshot", "image", "video", "file"]:
-        ext_map = {
-            "screenshot": ".png",
-            "image": ".jpg",
-            "video": ".mp4",
-            "file": ".bin"
-        }
-        ext = ext_map.get(content_type, ".bin")
-        dir_map = {
-            "screenshot": config.SCREENSHOTS_DIR,
-            "image": config.IMAGE_DIR,
-            "video": config.VIDEOS_DIR,
-            "file": config.FILES_DIR
-        }
-        filename = f"{base}{ext}"
-        path = os.path.join(dir_map[content_type], filename)
-        try:
-            async with aiofiles.open(path, "wb") as f:
-                await f.write(content)
-            logger.info(f"[{content_type.upper()}] 已保存至: {path}")
-        except Exception as e:
-            logger.error(f"保存{content_type}失败: {e}")
+    filepath = await storage.save_content(url, content, content_type)
+    if filepath:
+        logger.info(f"[{content_type.upper()}] 已保存: {filepath}")
+        return filepath
+    return None

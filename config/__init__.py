@@ -54,6 +54,9 @@ class config:
     GECKODRIVER_PATH: str = "D:\\Tor Browser\\Browser\\geckodriver.exe"
     TOR_BROWSER_BINARY: str = "D:\\Tor Browser\\Browser\\firefox.exe"
     
+    # 数据库配置
+    DB_PATH: str = "data/darknet.db"
+
     # 种子URL
     SEED_URLS: List[str] = field(default_factory=lambda: [
         "http://6nhmgdpnyoljh5uzr5kwlatx2u3diou4ldeommfxjz3wkhalzgjqxzqd.onion/",

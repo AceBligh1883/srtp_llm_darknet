@@ -6,17 +6,17 @@
 from typing import Dict, Any, Optional
 from src.logger import logger
 from src.processor.text_preprocessor import TextPreprocessor
+from src.processor.image_preprocessor import ImagePreprocessor
 from src.utils.text_splitter import TextSplitter
 from transformers import CLIPProcessor, CLIPModel
 import torch
-from PIL import Image
 
 class DarknetAnalyzer:
     def __init__(self, max_text_length: int = 1024) -> None:
         # 初始化基础组件
         self.preprocessor = TextPreprocessor(max_text_length)
         self.text_chunker = TextSplitter()
-        # 初始化模型
+        self.image_preprocessor = ImagePreprocessor()
         self._init_models()
         
     def _init_models(self):
@@ -27,17 +27,34 @@ class DarknetAnalyzer:
 
     def get_text_embedding(self, text: str) -> Dict[str, torch.Tensor]:
         """获取文本向量"""
-        inputs = self.processor(text=text, return_tensors="pt", padding=True, truncation=True)
-        with torch.no_grad():
-            embedding = self.model.get_text_features(**inputs)
-        return {"embedding": embedding}
+        try:
+            # 文本预处理
+            processed_text = self.preprocessor.preprocess(text)
+            if not processed_text:
+                return None
+                
+            # 生成向量
+            inputs = self.processor(text=processed_text, return_tensors="pt", 
+                                padding=True, truncation=True)
+            with torch.no_grad():
+                embedding = self.model.get_text_features(**inputs)
+                
+            return {"embedding": embedding}
+        
+        except Exception as e:
+            logger.error(f"文本处理失败: {str(e)}")
+            return None
 
     def get_image_embedding(self, image_path: str) -> Optional[Dict[str, torch.Tensor]]:
         """获取图像向量"""
         try:
-            image = Image.open(image_path).convert('RGB')
+            # 图像预处理
+            image = self.image_preprocessor.preprocess(image_path)
+            if image is None:
+                return None
+                
+            # 生成向量
             inputs = self.processor(images=image, return_tensors="pt")
-            
             with torch.no_grad():
                 embedding = self.model.get_image_features(**inputs)
                 
@@ -52,8 +69,9 @@ class DarknetAnalyzer:
         result = {}
         
         if text_path:
-            processed_text = self.preprocessor.preprocess(text_path)
-            embeddings = self.get_text_embedding(processed_text)
+            with open(text_path, 'r', encoding='utf-8') as f:
+                text_content = f.read()
+            embeddings = self.get_text_embedding(text_content)
 
         elif image_path:
             embeddings = self.get_image_embedding(image_path)

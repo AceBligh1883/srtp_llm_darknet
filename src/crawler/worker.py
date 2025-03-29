@@ -63,12 +63,12 @@ class Worker:
             self.link_extractor.extract_links(soup, url, depth)
         
         # 将截图任务添加到独立进程的队列
-        if success:
-            self.screenshot_manager.add_task(url)
+        #if success:
+        #    self.screenshot_manager.add_task(url)
     
     async def run(self):
         """运行爬虫工作器"""
-        self.screenshot_manager.start()
+        #self.screenshot_manager.start()
         await self.http_client.init_session()
         
         try:
