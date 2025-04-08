@@ -111,7 +111,6 @@ class StorageManager:
             )
             
             self._save_metadata(meta)
-            logger.info(f"内容已保存: {filepath}")
             return filepath
             
         except Exception as e:

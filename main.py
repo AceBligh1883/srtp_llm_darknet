@@ -28,7 +28,7 @@ def setup_dirs() -> None:
         config.IMAGE_DIR,
         config.SCREENSHOTS_DIR,
         config.VIDEOS_DIR,
-        config.FILES_DIR
+        config.FILE_DIR
     ]
     
     for directory in directories:

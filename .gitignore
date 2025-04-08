@@ -6,9 +6,11 @@ __pycache__/
 *.pyo
 *.pyd
 *.txt
+!requirements.txt
 *.jpg
 *.png
 *.md
+!README.md
 data/input/files/*
 !data/input/files/.gitkeep
 data/input/images/*
@@ -21,8 +23,7 @@ data/input/videos/*
 !data/input/videos/.gitkeep
 data/output/json/*
 !data/output/json/.gitkeep
-.ipynb_checkpoints/
 *.log
+*test*
 .env
 .venv/
-1.py

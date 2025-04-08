@@ -10,7 +10,7 @@ class config:
     IMAGE_DIR: str = "data/input/images"
     SCREENSHOTS_DIR: str = "data/input/screenshots"
     VIDEOS_DIR: str = "data/input/videos"
-    FILES_DIR: str = "data/input/files"
+    FILE_DIR: str = "data/input/files"
     OUTPUT_DIR: str = "data/output/json" 
     
     # 模型配置
