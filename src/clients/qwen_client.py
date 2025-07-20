@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# src/clients/qwen_client.py
 """
 离线 Qwen 模型客户端
 """
@@ -6,7 +6,7 @@
 import subprocess
 from typing import Optional
 from src.common.logger import logger
-from src.common.config import config
+from src.common import config
 
 class QwenClient:
     """

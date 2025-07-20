@@ -2,6 +2,7 @@
 .vs/
 .vscode/
 __pycache__/
+src/common/config.py
 *.pyc
 *.pyo
 *.pyd
