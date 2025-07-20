@@ -2,13 +2,13 @@
 """
 只负责Elasticsearch操作的模块
 """
-from typing import List, Optional
+from typing import List
 import numpy as np
 from elasticsearch import Elasticsearch
 
 from src.common import config
 from src.common.logger import logger
-from src.common.data_models import ContentMeta, SearchResult
+from src.common.data_models import SearchResult
 from src.storage.database import DatabaseManager
 
 class IndexManager:

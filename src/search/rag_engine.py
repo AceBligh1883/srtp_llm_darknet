@@ -3,11 +3,11 @@
 检索增强生成 (RAG) 引擎
 """
 import os
-from typing import List, Dict
+from typing import List
 
 from src.common import config
 from src.common.logger import logger
-from src.search.engine import SearchEngine, SearchResult
+from src.search.engine import SearchEngine
 from src.clients.gemini_client  import GeminiClient
 
 class RAGEngine:
@@ -53,8 +53,7 @@ class RAGEngine:
         """
         logger.info(f"收到RAG问题:'{question[:50]}...'")
 
-        # 1. Retrieval: 从搜索引擎获取最相关的文档
-        logger.info("第1步: 检索相关文档...")
+        logger.info("检索相关文档...")
         search_results = self.search_engine.search_by_text(
             query=question, 
             top_k=config.RAG_TOP_K
@@ -64,7 +63,6 @@ class RAGEngine:
             logger.warning("未能根据问题找到任何相关文档。")
             return "抱歉，我在数据库中找不到与您问题相关的任何文档来生成回答。"
 
-        # 提取上下文内容
         contexts = []
         logger.info(f"找到 {len(search_results)} 个潜在相关文档，正在读取内容...")
         for result in search_results:
@@ -81,13 +79,11 @@ class RAGEngine:
             logger.warning("找到了相关文档条目，但无法读取其内容。")
             return "我找到了一些相关的文档条目，但无法成功读取它们的内容来组织答案。"
 
-        # 2. Augmentation: 构建Prompt
-        logger.info("第2步: 使用检索到的上下文构建Prompt...")
+        logger.info("使用检索到的上下文构建Prompt...")
         final_prompt = self._build_prompt(question, contexts)
         logger.debug(f"发送给LLM的最终Prompt:\n{final_prompt}")
 
-        # 3. Generation: 调用LLM生成答案
-        logger.info("第3步: 使用LLM生成回答...")
+        logger.info("使用LLM生成回答...")
         answer = self.llm_client.generate(final_prompt)
         
         logger.info("回答生成完毕。")
@@ -99,8 +95,7 @@ class RAGEngine:
             """
             logger.info(f"收到RAG图像查询: '{image_path}'")
 
-            # 1. Retrieval: 使用图像进行搜索
-            logger.info("第1步: 基于图像检索相关文档...")
+            logger.info("基于图像检索相关文档...")
             search_results = self.search_engine.search_by_image(
                 image_path=image_path,
                 top_k=config.RAG_TOP_K
@@ -110,12 +105,10 @@ class RAGEngine:
                 logger.warning("未能根据图像找到任何相关文档。")
                 return "抱歉，我在数据库中找不到与您提供的图像相关的任何文档来生成回答。"
 
-            # --- 后续步骤与 ask 方法完全相同 ---
             contexts = []
             logger.info(f"找到 {len(search_results)} 个潜在相关文档，正在读取内容...")
             for result in search_results:
                 meta = result.metadata
-                # 注意：我们找到的可能是文本文件，也可能是图片文件
                 if meta and meta.content_type == 'text' and meta.file_path and os.path.exists(meta.file_path):
                     try:
                         with open(meta.file_path, 'r', encoding='utf-8') as f:
@@ -124,20 +117,17 @@ class RAGEngine:
                     except Exception as e:
                         logger.error(f"读取上下文文件失败 {meta.file_path}: {e}")
                 elif meta and meta.content_type == 'image':
-                    # 如果找到了相关的图片，我们可以把它的路径也作为上下文
                     contexts.append(f"相关图片资料: {meta.file_path}")
 
             if not contexts:
                 logger.warning("找到了相关文档条目，但无法读取其内容。")
                 return "我找到了一些相关的文档条目，但无法成功读取它们的内容来组织答案。"
 
-            # 2. Augmentation: 使用默认问题和上下文构建Prompt
-            logger.info("第2步: 使用检索到的上下文构建Prompt...")
+            logger.info("使用检索到的上下文构建Prompt...")
             final_prompt = self._build_prompt(self.DEFAULT_IMAGE_QUESTION, contexts)
             logger.info(f"发送给大语言模型的最终Prompt:\n{final_prompt}")
 
-            # 3. Generation: 调用LLM生成答案
-            logger.info("第3步: 使用LLM生成回答...")
+            logger.info("使用LLM生成回答...")
             answer = self.qwen_client.generate(final_prompt)
             
             logger.info("回答生成完毕。")

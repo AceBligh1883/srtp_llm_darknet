@@ -5,7 +5,7 @@ HTTP客户端模块，负责通过Tor代理进行网络请求
 import asyncio
 import aiohttp
 import aiohttp_socks
-from typing import Optional, Tuple
+from typing import Optional
 
 from src.common import config
 from src.common.logger import logger

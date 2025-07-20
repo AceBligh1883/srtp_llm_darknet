@@ -85,7 +85,6 @@ def handle_rag(args: argparse.Namespace):
     console = Console()
     console.print()
 
-    # 根据传入的参数决定是文本查询还是图像查询
     if args.ask:
         question = args.ask
         query_display = f"[bold]Q:[/bold] {question}"
@@ -105,7 +104,6 @@ def handle_rag(args: argparse.Namespace):
         logger.warning("请使用 --ask '你的问题' 或 --query-image '图片路径' 来提问。")
         return
 
-    # 使用Panel美化输出
     question_panel = Panel(
         query_display,
         title="[bold yellow]您的查询[/bold yellow]",

@@ -2,12 +2,9 @@
 """
 HTML解析与链接提取模块
 """
-import json
 from bs4 import BeautifulSoup
 from typing import Set
 
-from src.common import config
-from src.common.logger import logger
 from src.common.url_processor import URLProcessor
 
 class Parser:

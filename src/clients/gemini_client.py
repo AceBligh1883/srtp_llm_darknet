@@ -10,10 +10,9 @@ class GeminiClient:
     通过兼容OpenAI格式的代理API调用Gemini模型的客户端。
     """
     def __init__(self):
-        # 从配置文件中读取API URL和Key
         self.api_url = config.GEMINI_API_URL
         self.api_key = config.GEMINI_API_KEY
-        self.model = config.DEFAULT_MODEL # 模型名称也从配置读取
+        self.model = config.DEFAULT_MODEL 
 
         if not self.api_url or not self.api_key:
             raise ValueError("GEMINI_API_URL and GEMINI_API_KEY must be set in the config file.")
@@ -27,17 +26,13 @@ class GeminiClient:
             "Authorization": f"Bearer {self.api_key}"
         }
 
-        # 构建符合OpenAI格式的请求体
-        # 这里的 prompt 是我们从 RAGEngine 传过来的完整prompt
         payload = {
             "model": self.model,
             "messages": [
-                # 我们可以简化，直接把整个prompt作为用户输入
-                # 或者遵循system + user的角色划分，效果可能更好
                 {"role": "user", "content": prompt}
             ],
-            "temperature": 0.7, # 可以调整创新度
-            "stream": False # 我们需要一次性返回结果，所以设置为False
+            "temperature": 0.7,
+            "stream": False 
         }
 
         logger.info(f"正在向Gemini代理发送请求，使用模型: {self.model}")
@@ -47,16 +42,12 @@ class GeminiClient:
                 self.api_url,
                 headers=headers,
                 data=json.dumps(payload),
-                timeout=180  # 设置一个较长的超时时间，比如3分钟
+                timeout=180  
             )
 
-            # 检查HTTP状态码
             response.raise_for_status()
-
             response_data = response.json()
             
-            # 解析返回结果，提取模型回答
-            # 同样，这也是标准的OpenAI返回格式
             if "choices" in response_data and len(response_data["choices"]) > 0:
                 answer = response_data["choices"][0]["message"]["content"]
                 logger.info("已成功从Gemini代理接收到响应。")
