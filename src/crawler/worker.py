@@ -1,103 +1,87 @@
-# -*- coding: utf-8 -*-
+# src/crawler/worker.py
 """
-爬虫工作器模块
+爬虫工作器，负责执行爬取任务的核心逻辑
 """
-
-import os
+import asyncio
+from bs4 import BeautifulSoup
 import redis
 import json
-from bs4 import BeautifulSoup
 
-from src.logger import logger
-from config import config
-from src.utils.url_processor import URLProcessor
-from src.utils.io_utils import save_content 
-from src.crawler.screenshot_manager import ScreenshotManager
-from src.crawler.http_client import HttpClient
-from src.crawler.link_extractor import LinkExtractor
+from src.common import config
+from src.common.logger import logger
+from src.crawler.client import HttpClient
+from src.crawler.parser import Parser
+from src.crawler.saver import ContentSaver
+from src.crawler.screenshot import ScreenshotManager
 
 class Worker:
     """爬虫工作器，负责执行爬取任务"""
-    def __init__(self):
-        # 初始化Redis客户端
-        self.redis = redis.Redis(
-            host=config.REDIS_HOST, 
-            port=config.REDIS_PORT, 
-            db=config.REDIS_DB
-        )
-        
-        # 初始化组件
+    def __init__(self, use_screenshot=False):
+        self.redis = redis.Redis(host=config.REDIS_HOST, port=config.REDIS_PORT, db=config.REDIS_DB)
         self.http_client = HttpClient()
-        self.link_extractor = LinkExtractor(self.redis)
-        self.screenshot_manager = ScreenshotManager()
-        self._setup_directories()
-    
-    def _setup_directories(self):
-        """确保所有必要的目录存在"""
-        directories = [
-            config.TEXT_DIR, 
-            config.IMAGE_DIR,
-            config.OUTPUT_DIR,
-            config.SCREENSHOTS_DIR,
-            config.VIDEOS_DIR,
-            config.FILE_DIR
-        ]
-        
-        for dir_path in directories:
-            os.makedirs(dir_path, exist_ok=True)
-    
-    async def process_page(self, url, depth):
-        """处理单个页面"""
-        canon_url = URLProcessor.canonicalize(url)
-        # 标记为已访问
-        self.redis.sadd(config.VISITED_SET, canon_url)
-        logger.info(f"处理页面 [深度 {depth}]: {url}")
-        
-        # 获取页面内容
-        html, success = await self.http_client.fetch(url)
-        if html:
-            soup = BeautifulSoup(html, "html.parser")
-            text = soup.get_text(separator="\n", strip=True)
+        self.use_screenshot = use_screenshot
+        if self.use_screenshot:
+            self.screenshot_manager = ScreenshotManager()
+
+    async def _process_task(self, task: dict):
+        """处理单个爬取任务"""
+        url = task.get("url")
+        depth = task.get("depth", 0)
+        if not url: return
+
+        logger.info(f"开始处理 [深度 {depth}]: {url}")
+
+        # 1. 获取页面内容
+        html_content = await self.http_client.fetch(url)
+
+        # 2. 如果是HTML，保存文本并提取链接
+        if html_content:
+            # 保存纯文本
+            soup = BeautifulSoup(html_content, "lxml")
+            text = soup.get_text(separator='\n', strip=True)
             if text:
-                await save_content(text, url, "text")
-            self.link_extractor.extract_links(soup, url, depth)
-        
-        # 将截图任务添加到独立进程的队列
-        #if success:
-        #    self.screenshot_manager.add_task(url)
-    
+                ContentSaver.save(url, 'text', text.encode('utf-8'))
+            
+            # 提取新链接并加入队列
+            if depth < config.MAX_DEPTH:
+                new_links = Parser.extract_links(html_content, url)
+                for link in new_links:
+                    if not self.redis.sismember(config.VISITED_SET, link):
+                        new_task = {"url": link, "depth": depth + 1}
+                        self.redis.rpush(config.TASK_QUEUE, json.dumps(new_task))
+                        self.redis.sadd(config.VISITED_SET, link)
+                        logger.debug(f"发现新链接: {link}")
+
+        # 3. 截图 (如果启用)
+        if self.use_screenshot:
+            self.screenshot_manager.take_screenshot(url)
+
     async def run(self):
-        """运行爬虫工作器"""
-        #self.screenshot_manager.start()
-        await self.http_client.init_session()
-        
+        """运行爬虫工作器主循环"""
+        await self.http_client.start()
+        if self.use_screenshot:
+            self.screenshot_manager.start()
+
         try:
             while True:
-                # 从队列获取任务
-                task_data = self.redis.blpop(config.TASK_QUEUE, timeout=30)
+                # 从Redis队列中阻塞式获取任务
+                task_data = self.redis.blpop(config.TASK_QUEUE, timeout=60)
                 if not task_data:
-                    logger.info("任务队列为空，爬虫退出...")
+                    logger.info("任务队列在60秒内无新任务，爬虫即将退出...")
                     break
                 
-                _, task_json = task_data
+                _, task_json_str = task_data
                 try:
-                    task = json.loads(task_json)
+                    task = json.loads(task_json_str)
+                    await self._process_task(task)
+                except json.JSONDecodeError:
+                    logger.error(f"无法解析任务数据: {task_json_str}")
                 except Exception as e:
-                    logger.error(f"任务数据解析错误: {e}")
-                    continue
-                
-                url = task.get("url")
-                depth = task.get("depth", 0)
-                
-                if url and URLProcessor.is_onion(url):
-                    await self.process_page(url, depth)
-        
-        except Exception as e:
-            logger.error(f"爬虫运行异常: {e}")
-        
-        finally:
-            await self.http_client.close()
-            self.screenshot_manager.stop()
-            logger.info("爬虫已关闭")
+                    logger.error(f"处理任务时发生未知错误: {e}")
 
+        finally:
+            await self.http_client.stop()
+            if self.use_screenshot:
+                self.screenshot_manager.stop()
+            logger.info("爬虫工作器已停止。")
 

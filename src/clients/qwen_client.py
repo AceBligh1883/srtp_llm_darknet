@@ -5,8 +5,8 @@
 
 import subprocess
 from typing import Optional
-from src.logger import logger
-from config import config
+from src.common.logger import logger
+from src.common.config import config
 
 class QwenClient:
     """

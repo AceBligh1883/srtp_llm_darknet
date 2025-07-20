@@ -1,0 +1,25 @@
+# docker-compose.yml (新版，使用HTTP)
+version: '3.8'
+
+services:
+  elasticsearch:
+    image: elasticsearch:8.14.0
+    container_name: es-for-darknet-project
+    environment:
+      # 关键修改：禁用安全特性，包括HTTPS和密码验证
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    # 移除了复杂的HTTPS健康检查，使用简单的HTTP检查
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -s -f http://localhost:9200/_cluster/health || exit 1" ]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+
+volumes:
+  es_data:
+    driver: local
