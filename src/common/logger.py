@@ -16,7 +16,7 @@ LOG_LEVELS = {
 def setup_logger() -> logging.Logger:
     """配置并返回日志记录器"""
     logger = logging.getLogger("DarknetSystem")
-    logger.propagate = False  # 防止日志向上传播到根logger
+    logger.propagate = False 
 
     if logger.hasHandlers():
         logger.handlers.clear()

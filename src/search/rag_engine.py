@@ -8,7 +8,7 @@ from typing import List
 from src.common import config
 from src.common.logger import logger
 from src.search.engine import SearchEngine
-from src.clients.gemini_client  import GeminiClient
+from src.clients.gemini_client import GeminiClient
 
 class RAGEngine:
     """
@@ -30,6 +30,7 @@ class RAGEngine:
 
 你的回答:
 """
+    DEFAULT_IMAGE_QUESTION = "请描述所提供材料的内容，包括图像中可见的任何文本或物体。场景中正在发生什么？"
 
     def __init__(self):
         logger.info("正在初始化RAG引擎...")
@@ -90,45 +91,45 @@ class RAGEngine:
         return answer
 
     def ask_with_image(self, image_path: str) -> str:
-            """
-            使用图像作为输入，执行完整的RAG流程来回答问题。
-            """
-            logger.info(f"收到RAG图像查询: '{image_path}'")
+        """
+        使用图像作为输入，执行完整的RAG流程来回答问题。
+        """
+        logger.info(f"收到RAG图像查询: '{image_path}'")
 
-            logger.info("基于图像检索相关文档...")
-            search_results = self.search_engine.search_by_image(
-                image_path=image_path,
-                top_k=config.RAG_TOP_K
-            )
+        logger.info("基于图像检索相关文档...")
+        search_results = self.search_engine.search_by_image(
+            image_path=image_path,
+            top_k=config.RAG_TOP_K
+        )
 
-            if not search_results:
-                logger.warning("未能根据图像找到任何相关文档。")
-                return "抱歉，我在数据库中找不到与您提供的图像相关的任何文档来生成回答。"
+        if not search_results:
+            logger.warning("未能根据图像找到任何相关文档。")
+            return "抱歉，我在数据库中找不到与您提供的图像相关的任何文档来生成回答。"
 
-            contexts = []
-            logger.info(f"找到 {len(search_results)} 个潜在相关文档，正在读取内容...")
-            for result in search_results:
-                meta = result.metadata
-                if meta and meta.content_type == 'text' and meta.file_path and os.path.exists(meta.file_path):
-                    try:
-                        with open(meta.file_path, 'r', encoding='utf-8') as f:
-                            content = f.read()
-                            contexts.append(f"来源文件: {meta.file_path}\n\n文件内容:\n{content}")
-                    except Exception as e:
-                        logger.error(f"读取上下文文件失败 {meta.file_path}: {e}")
-                elif meta and meta.content_type == 'image':
-                    contexts.append(f"相关图片资料: {meta.file_path}")
+        contexts = []
+        logger.info(f"找到 {len(search_results)} 个潜在相关文档，正在读取内容...")
+        for result in search_results:
+            meta = result.metadata
+            if meta and meta.content_type == 'text' and meta.file_path and os.path.exists(meta.file_path):
+                try:
+                    with open(meta.file_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        contexts.append(f"来源文件: {meta.file_path}\n\文件内容:\n{content}")
+                except Exception as e:
+                    logger.error(f"读取上下文文件失败 {meta.file_path}: {e}")
+            elif meta and meta.content_type == 'image':
+                contexts.append(f"相关图片资料: {meta.file_path}")
 
-            if not contexts:
-                logger.warning("找到了相关文档条目，但无法读取其内容。")
-                return "我找到了一些相关的文档条目，但无法成功读取它们的内容来组织答案。"
+        if not contexts:
+            logger.warning("找到了相关文档条目，但无法读取其内容。")
+            return "我找到了一些相关的文档条目，但无法成功读取它们的内容来组织答案。"
 
-            logger.info("使用检索到的上下文构建Prompt...")
-            final_prompt = self._build_prompt(self.DEFAULT_IMAGE_QUESTION, contexts)
-            logger.info(f"发送给大语言模型的最终Prompt:\n{final_prompt}")
+        logger.info("使用检索到的上下文构建Prompt...")
+        final_prompt = self._build_prompt(self.DEFAULT_IMAGE_QUESTION, contexts)
+        logger.debug(f"发送给LLM的最终Prompt:\n{final_prompt}")
 
-            logger.info("使用LLM生成回答...")
-            answer = self.qwen_client.generate(final_prompt)
-            
-            logger.info("回答生成完毕。")
-            return answer
+        logger.info("使用LLM生成回答...")
+        answer = self.llm_client.generate(final_prompt)
+        
+        logger.info("回答生成完毕。")
+        return answer

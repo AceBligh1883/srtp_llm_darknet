@@ -1,4 +1,4 @@
-# src/main.py
+# main.py
 import os
 import time
 import argparse
@@ -53,7 +53,8 @@ def handle_process(args: argparse.Namespace):
     if args.process_text or args.process_all:
         pipeline.process_directory(config.TEXT_DIR, 'text')
     if args.process_image or args.process_all:
-        pipeline.process_directory(config.IMAGE_DIR, 'image')
+        for image_dir in config.IMAGE_SOURCE_DIRS:
+            pipeline.process_directory(image_dir, 'image')
 
 def handle_search(args: argparse.Namespace):
     """处理内容检索命令"""

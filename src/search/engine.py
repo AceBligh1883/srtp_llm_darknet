@@ -43,12 +43,18 @@ class SearchEngine:
         """
         logger.info(f"执行图像搜索: '{image_path}'")
         try:
-            query_vector = self.embedding_generator.generate_for_image(image_path)
+            pil_image = self.image_processor.process(image_path)
+            if pil_image is None:
+                logger.error(f"无法处理图像文件: {image_path}")
+                return []
+
+            query_vector = self.embed_generator.get_image_embedding(pil_image)
+            
             if query_vector is None:
                 logger.error(f"为图像 {image_path} 生成向量失败。")
                 return []
             
-            return self._perform_knn_search(query_vector, top_k)
+            return self.index_manager.vector_search(query_vector, top_k)
         except Exception as e:
             logger.error(f"图像搜索过程中发生错误: {e}")
             return []

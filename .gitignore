@@ -28,3 +28,4 @@ data/output/json/*
 *test*
 .env
 .venv/
+data/darknet.db
