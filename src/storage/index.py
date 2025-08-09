@@ -55,7 +55,7 @@ class IndexManager:
         Elasticsearch中的文档ID与SQLite中的主键ID保持一致。
         """
         try:
-            doc = {"doc_id": doc_id, "vector": vector.tolist()}
+            doc = {"doc_id": doc_id, "vector": vector}
             self.es.index(index=config.ES_INDEX, id=str(doc_id), document=doc)
             logger.info(f"文档已索引到ES, ID: {doc_id}")
             return True
@@ -68,7 +68,7 @@ class IndexManager:
         try:
             knn_query = {
                 "field": "vector",
-                "query_vector": query_vector.tolist(),
+                "query_vector": query_vector,
                 "k": top_k,
                 "num_candidates": 100
             }
