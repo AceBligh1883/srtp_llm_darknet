@@ -16,7 +16,27 @@ from src.search.rag_engine import RAGEngine
 from rich.console import Console
 from rich.panel import Panel
 from rich.markdown import Markdown
+from rich.text import Text
+from rich.table import Table
 
+def _read_snippet_from_file(file_path: str, max_len: int = 300) -> tuple[str, bool]:
+    """
+    从文件路径安全地读取一个内容片段。
+    返回 (内容片段, 是否被截断) 的元组。
+    """
+    if not os.path.exists(file_path):
+        return "[内容文件不存在]", False
+    try:
+        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            content = f.read(max_len + 1)
+        
+        was_truncated = len(content) > max_len
+        snippet = content[:max_len] if was_truncated else content
+        return snippet, was_truncated
+
+    except Exception as e:
+        return f"[读取文件时出错: {e}]", False
+    
 def setup_dirs():
     """确保所有必要的输入数据目录存在"""
     dirs = [config.TEXT_DIR, config.IMAGE_DIR]
@@ -69,17 +89,53 @@ def handle_search(args: argparse.Namespace):
     else:
         return
 
-    logger.info(f"找到 {len(results)} 个相似结果:")
+    console = Console()
+    query_term = args.search_text or args.search_image
+
+    console.print(f"\n[bold green]与 “{query_term}” 相关的 {len(results)} 个结果[/bold green]\n")
+
     if not results:
+        console.print(Panel("[yellow]未找到任何相关结果。[/yellow]", title="提示", border_style="yellow"))
         return
-        
+    
     for i, res in enumerate(results, 1):
-        print("-" * 20)
-        print(f"{i}. Score: {res.score:.4f}")
-        print(f"   ID: {res.doc_id}")
-        print(f"   Type: {res.metadata.content_type}")
-        print(f"   Path: {res.metadata.file_path}")
-        print(f"   Timestamp: {res.metadata.timestamp}")
+        was_truncated = False
+        if res.metadata.content_type == 'text':
+            content_snippet, was_truncated = _read_snippet_from_file(res.metadata.file_path)
+        else: # 对于图片等其他类型
+            content_snippet = f"图像文件，路径: {os.path.basename(res.metadata.file_path)}"
+
+        highlighted_snippet = Text(content_snippet)
+        if args.search_text:
+             highlighted_snippet.highlight_words(args.search_text.split(), "bold magenta on white")
+
+        meta_table = Table.grid(expand=True)
+        meta_table.add_column(style="dim cyan", no_wrap=True) # 标签列
+        meta_table.add_column(ratio=1) # 内容列
+        meta_table.add_row("文件:", f" {os.path.basename(res.metadata.file_path)}")
+        meta_table.add_row("类型:", f" {res.metadata.content_type}")
+        panel_body = Table.grid(expand=True, padding=0)
+        panel_body.add_column()
+        panel_body.add_row(meta_table)
+        panel_body.add_row("") # 空行
+        panel_body.add_row(highlighted_snippet)
+
+        if was_truncated:
+            full_path_text = Text()
+            full_path_text.append("\n... [查看完整内容]: ", style="dim")
+            full_path_text.append(res.metadata.file_path, style="dim underline")
+            panel_body.add_row(full_path_text)
+
+        result_panel = Panel(
+            panel_body,
+            title=f"[bold cyan]#{i}[/bold cyan] [white]Score:[/white] [bold yellow]{res.score:.4f}[/bold yellow]",
+            border_style="blue",
+            expand=False,
+            padding=(1, 2)
+        )
+        console.print(result_panel)
+        console.print()
+
 
 def handle_rag(args: argparse.Namespace):
     """处理RAG问答命令"""
@@ -101,9 +157,6 @@ def handle_rag(args: argparse.Namespace):
         with console.status("[bold cyan]AI正在分析图像并思考...[/bold cyan]", spinner="dots"):
             rag_engine = RAGEngine()
             answer = rag_engine.ask_with_image(image_path)
-    else:
-        logger.warning("请使用 --ask '你的问题' 或 --query-image '图片路径' 来提问。")
-        return
 
     question_panel = Panel(
         query_display,

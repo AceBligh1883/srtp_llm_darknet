@@ -23,22 +23,21 @@ class EmbeddingGenerator:
                 config.MODEL_NAME, 
                 device=self.device,
                 trust_remote_code=True,
-                model_kwargs={'torch_dtype': torch.float16}
+                model_kwargs={'torch_dtype': torch.bfloat16}
             )
             logger.info(f"成功加载模型: {config.MODEL_NAME}")
         except Exception as e:
             logger.error(f"加载模型失败: {config.MODEL_NAME}. 错误: {e}")
             raise
 
-    def get_text_embeddings(self, texts: List[str]) -> List[List[float]]:
+    def get_text_embeddings(self, texts: List[str], prompt_name: str) -> List[List[float]]:
         """获取文本的向量"""
         try:
             embeddings = self.model.encode(
                 texts, 
                 normalize_embeddings=True,
-                task="retrieval",
-                show_progress_bar=True,
-                batch_size=config.PROCESSING_BATCH_SIZE
+                prompt_name=prompt_name,
+                task="retrieval"
             )
             return embeddings.tolist()
         except Exception as e:
@@ -52,7 +51,6 @@ class EmbeddingGenerator:
                 images, 
                 normalize_embeddings=True,
                 task="retrieval",
-                show_progress_bar=True,
                 batch_size=config.PROCESSING_BATCH_SIZE
             )
             return embeddings.tolist()

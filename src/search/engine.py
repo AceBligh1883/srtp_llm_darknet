@@ -29,7 +29,7 @@ class SearchEngine:
         """通过文本查询进行向量搜索"""
         logger.info(f"执行文本搜索: '{query[:50]}...'")
         processed_query = self.text_processor.process(query)
-        query_vector = self.embed_generator.get_text_embedding(processed_query)
+        query_vector = self.embed_generator.get_text_embeddings([processed_query], prompt_name="query")
 
         if query_vector is None:
             logger.error("查询文本向量生成失败。")
@@ -48,7 +48,7 @@ class SearchEngine:
                 logger.error(f"无法处理图像文件: {image_path}")
                 return []
 
-            query_vector = self.embed_generator.get_image_embedding(pil_image)
+            query_vector = self.embed_generator.get_image_embeddings(pil_image)
             
             if query_vector is None:
                 logger.error(f"为图像 {image_path} 生成向量失败。")

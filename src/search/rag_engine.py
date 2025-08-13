@@ -121,7 +121,9 @@ CRITICAL: 你的整个回答必须只有 Python 列表，不能有任何周围�
             results = self.search_engine.search_by_text(query, top_k=config.RAG_TOP_K)
             all_results.extend(results)
         
-        unique_results = list({res.doc_id: res for res in all_results}.values())
+        unique_results_dict = {res.doc_id: res for res in all_results}
+        unique_results = sorted(unique_results_dict.values(), key=lambda r: r.score, reverse=True)
+        
         if not unique_results:
             logger.warning("混合检索未能找到任何相关文档。")
             return "抱歉，我在数据库中找不到与您问题相关的任何文档来生成回答。"
@@ -140,7 +142,21 @@ CRITICAL: 你的整个回答必须只有 Python 列表，不能有任何周围�
         logger.info("正在生成最终回答...")
         answer = self.llm_client.generate(final_prompt)
 
-        return answer
+        report = []
+        report.append("### **情报分析报告**")
+        report.append("---")
+        report.append("#### **核心结论**")
+        report.append(answer)
+        report.append("\n")
+        report.append("#### **关键证据来源 (Top 5)**")
+        for i, res in enumerate(unique_results[:5]):
+            file_name = os.path.basename(res.metadata.file_path)
+            report.append(f"{i+1}. **文件**: `{file_name}` (相似度: {res.score:.2f})")
+        
+        if len(unique_results) > 5:
+            report.append(f"\n*（以及其他 {len(unique_results) - 5} 个相关来源）*")
+
+        return "\n".join(report)
 
     def ask_with_image(self, image_path: str) -> str:
         logger.info(f"收到RAG图像查询: '{image_path}'")
