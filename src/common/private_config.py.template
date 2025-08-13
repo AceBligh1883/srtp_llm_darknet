@@ -1,0 +1,21 @@
+"""
+私人配置文件模板。
+请将此文件复制为 private_config.py，并填入您的真实信息。
+"""
+
+# API 密钥与端点
+GEMINI_API_KEY: str = "在此处填入您的Gemini API密钥" 
+GEMINI_API_URL: str = "https://chat.eqing.tech/v1/chat/completions" # 如果有变动则修改
+
+# 本地服务配置 (可根据你的环境修改)
+ES_HOST: str = "127.0.0.1"
+ES_PORT: int = 9200
+REDIS_HOST: str = "localhost"
+REDIS_PORT: int = 6379
+
+# 本机特定的绝对路径
+GECKODRIVER_PATH: str = "在此处填入您的geckodriver.exe的绝对路径"
+TOR_BROWSER_BINARY: str = "在此处填入您的firefox.exe的绝对路径"
+
+# 网络代理配置
+TOR_PROXY: str = "socks5://127.0.0.1:9150"

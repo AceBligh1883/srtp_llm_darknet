@@ -6,7 +6,7 @@ import re
 import unicodedata
 
 class TextProcessor:
-    """为CLIP模型准备文本，核心是保留语义"""
+    """为模型准备文本"""
 
     def __init__(self):
         self.html_tags_pattern = re.compile(r'<[^>]+>')

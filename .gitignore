@@ -2,7 +2,6 @@
 .vs/
 .vscode/
 __pycache__/
-src/common/config.py
 *.pyc
 *.pyo
 *.pyd
@@ -28,4 +27,5 @@ data/output/json/*
 *test*
 .env
 .venv/
+src/common/private_config.py
 data/darknet.db

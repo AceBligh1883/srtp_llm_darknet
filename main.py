@@ -139,6 +139,8 @@ def handle_search(args: argparse.Namespace):
 
 def handle_rag(args: argparse.Namespace):
     """处理RAG问答命令"""
+    if not (args.ask or args.query_image):
+        return
     console = Console()
     console.print()
 

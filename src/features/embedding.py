@@ -50,8 +50,7 @@ class EmbeddingGenerator:
             embeddings = self.model.encode(
                 images, 
                 normalize_embeddings=True,
-                task="retrieval",
-                batch_size=config.PROCESSING_BATCH_SIZE
+                task="retrieval"
             )
             return embeddings.tolist()
         except Exception as e:

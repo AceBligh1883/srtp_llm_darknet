@@ -3,9 +3,7 @@
 核心处理流水线，负责编排处理流程
 """
 import os
-from typing import List, Tuple
 from tqdm import tqdm
-import multiprocessing
 from src.common import config
 from src.common.logger import logger
 from src.storage.database import DatabaseManager
@@ -47,9 +45,14 @@ class ProcessingPipeline:
         desc = f"预处理 {content_type} 并保存元数据"
         for file_path in tqdm(file_paths, desc=desc):
             try:
-                data_to_embed = None
+                data_for_model = None
+                item_info = {}
                 if content_type == 'image':
-                    data_to_embed = self.image_processor.process(file_path)
+                    img = self.image_processor.process(file_path)
+                    if img.size[0] < 32 or img.size[1] < 32: continue
+                    item_info['pixels'] = img.width * img.height
+                    data_for_model = file_path 
+
                 elif content_type == 'text':
                     if os.path.getsize(file_path) < config.MIN_TEXT_LENGTH: continue
                     with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
@@ -58,14 +61,22 @@ class ProcessingPipeline:
                     if len(raw_text) > config.MAX_TEXT_CHARS:
                         raw_text = raw_text[:config.MAX_TEXT_CHARS]
                     
-                    data_to_embed = self.text_processor.process(raw_text)
-                    if len(data_to_embed) < config.MIN_TEXT_LENGTH: continue
+                    processed_text = self.text_processor.process(raw_text)
+                    if len(processed_text) < config.MIN_TEXT_LENGTH: continue
+                    data_for_model = processed_text
+                    item_info['text_content'] = processed_text
 
-                if data_to_embed:
+                if data_for_model:
                     metadata = self.db_manager.create_metadata_from_file(file_path, content_type)
                     doc_id = self.db_manager.save_metadata(metadata)
+                    
                     if doc_id:
-                        valid_items_for_embedding.append({'doc_id': doc_id, 'data': data_to_embed})
+                        item = {'doc_id': doc_id, 'data': data_for_model}
+                        if 'pixels' in item_info:
+                            item['pixels'] = item_info['pixels']
+                        if 'text_content' in item_info:
+                            item['text_content'] = item_info['text_content']
+                        valid_items_for_embedding.append(item)
             except Exception as e:
                 logger.error(f"预处理文件 '{file_path}' 失败: {e}")
 
@@ -103,21 +114,54 @@ class ProcessingPipeline:
                         pbar.update(len(current_batch_items))
         
         elif content_type == 'image':
-            batch_size = config.PROCESSING_BATCH_SIZE
-            with tqdm(total=len(valid_items_for_embedding), desc=f"批处理 {content_type}") as pbar:
-                for i in range(0, len(valid_items_for_embedding), batch_size):
-                    current_batch_items = valid_items_for_embedding[i : i + batch_size]
-                    if not current_batch_items: continue
+            valid_items_for_embedding.sort(key=lambda item: item['pixels'])
+            batch_counter = 0
+            with tqdm(total=len(valid_items_for_embedding), desc=f"动态批处理 {content_type}") as pbar:
+                i = 0
+                while i < len(valid_items_for_embedding):
+                    if batch_counter >= 4:
+                        logger.info("实验性中断：已处理4批图像，提前结束处理循环。")
+                        break
+                    current_batch_items = []
+                    current_batch_pixels = 0
+                    first_item = valid_items_for_embedding[i]
 
-                    batch_data = [item['data'] for item in current_batch_items]
-                    batch_vectors = self.embed_generator.get_image_embeddings(batch_data)
-                    if batch_vectors: all_vectors.extend(batch_vectors)
-                    else: all_vectors.extend([None] * len(current_batch_items))
-                    pbar.update(len(current_batch_items))
+                    if first_item['pixels'] > config.MAX_IMAGE_PIXELS:
+                        current_batch_items.append(first_item)
+                        i += 1
+                    else:
+                        while i < len(valid_items_for_embedding) and \
+                              (current_batch_pixels + valid_items_for_embedding[i]['pixels']) <= config.MAX_IMAGE_PIXELS:
+                            item = valid_items_for_embedding[i]
+                            if not current_batch_items:
+                                current_batch_items.append(item)
+                                current_batch_pixels += item['pixels']
+                                i += 1
+                            elif i < len(valid_items_for_embedding) and \
+                                 (current_batch_pixels + valid_items_for_embedding[i]['pixels']) <= config.MAX_IMAGE_PIXELS:
+                                current_batch_items.append(valid_items_for_embedding[i])
+                                current_batch_pixels += valid_items_for_embedding[i]['pixels']
+                                i += 1
+                            else:
+                                break 
+                
+                    if current_batch_items:
+                        batch_data = [item['data'] for item in current_batch_items]
+                        batch_vectors = self.embed_generator.get_image_embeddings(batch_data)
+                        if batch_vectors:
+                            all_vectors.extend(batch_vectors)
+                        else:
+                            all_vectors.extend([None] * len(current_batch_items))
+                        pbar.update(len(current_batch_items))
+                        batch_counter += 1
 
-        successful_items = [item for i, item in enumerate(valid_items_for_embedding) if all_vectors[i] is not None]
-        vectors = [v for v in all_vectors if v is not None]
-        
+        successful_items = []
+        vectors = []
+        for item, vector in zip(valid_items_for_embedding, all_vectors):
+            if vector is not None:
+                successful_items.append(item)
+                vectors.append(vector)
+
         if not vectors or len(vectors) != len(successful_items):
             logger.error("向量生成失败或数量不匹配，处理中止。")
             return
@@ -125,8 +169,14 @@ class ProcessingPipeline:
         success_count = 0
         desc_index = f"索引 {content_type} 向量到 Elasticsearch"
         for i, item in enumerate(tqdm(successful_items, desc=desc_index)):
-            text_content_for_es = item.get('text_content') 
-            if self.index_manager.index_document(item['doc_id'], vectors[i], text_content=text_content_for_es):
-                success_count += 1
+            doc_id = item['doc_id']
+            vector = vectors[i]
+            if content_type == 'image':
+                if self.index_manager.index_document(doc_id, vector):
+                    success_count += 1
+            elif content_type == 'text':
+                text_content_for_es = item.get('text_content') 
+                if self.index_manager.index_document(doc_id, vector, text_content=text_content_for_es):
+                    success_count += 1
         
         logger.info(f"目录 {os.path.basename(directory)} 处理完成。成功索引: {success_count}/{len(successful_items)}")
