@@ -114,14 +114,10 @@ class ProcessingPipeline:
                         pbar.update(len(current_batch_items))
         
         elif content_type == 'image':
-            valid_items_for_embedding.sort(key=lambda item: item['pixels'])
-            batch_counter = 0
+            valid_items_for_embedding.sort(key=lambda item: item['pixels'], reverse=True)
             with tqdm(total=len(valid_items_for_embedding), desc=f"动态批处理 {content_type}") as pbar:
                 i = 0
                 while i < len(valid_items_for_embedding):
-                    if batch_counter >= 4:
-                        logger.info("实验性中断：已处理4批图像，提前结束处理循环。")
-                        break
                     current_batch_items = []
                     current_batch_pixels = 0
                     first_item = valid_items_for_embedding[i]
@@ -153,7 +149,6 @@ class ProcessingPipeline:
                         else:
                             all_vectors.extend([None] * len(current_batch_items))
                         pbar.update(len(current_batch_items))
-                        batch_counter += 1
 
         successful_items = []
         vectors = []

@@ -45,7 +45,7 @@ DEFAULT_MODEL: str = "gemini-2.5-pro"
 MAX_TOKENS_PER_BATCH: int = 32768
 MIN_TEXT_LENGTH: int = 100
 MAX_TEXT_CHARS: int = 8192
-MAX_IMAGE_PIXELS: int = 4096 * 4096
+MAX_IMAGE_PIXELS: int = 2048 * 2048
 
 # 存储与数据库配置
 ES_INDEX: str = "darknet_multimodal_index"

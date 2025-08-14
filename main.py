@@ -103,7 +103,7 @@ def handle_search(args: argparse.Namespace):
         if res.metadata.content_type == 'text':
             content_snippet, was_truncated = _read_snippet_from_file(res.metadata.file_path)
         else: # 对于图片等其他类型
-            content_snippet = f"图像文件，路径: {os.path.basename(res.metadata.file_path)}"
+            content_snippet = f"图像文件，路径: {res.metadata.file_path}"
 
         highlighted_snippet = Text(content_snippet)
         if args.search_text:
