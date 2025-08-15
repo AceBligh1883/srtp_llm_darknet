@@ -3,6 +3,7 @@
 核心处理流水线，负责编排处理流程
 """
 import os
+import sys
 from tqdm import tqdm
 from src.common import config
 from src.common.logger import logger
@@ -70,7 +71,7 @@ class ProcessingPipeline:
                     metadata = self.db_manager.create_metadata_from_file(file_path, content_type)
                     doc_id = self.db_manager.save_metadata(metadata)
                     
-                    if doc_id:
+                    if doc_id and not self.index_manager.document_exists(doc_id):
                         item = {'doc_id': doc_id, 'data': data_for_model}
                         if 'pixels' in item_info:
                             item['pixels'] = item_info['pixels']
@@ -84,94 +85,46 @@ class ProcessingPipeline:
             logger.warning("没有有效的文件可供处理。")
             return
         
-        logger.info(f"开始为 {len(valid_items_for_embedding)} 个有效项目生成向量...")
-        all_vectors = []
-
         if content_type == 'text':
-            valid_items_for_embedding.sort(key=lambda item: len(item['data']), reverse=True)
-            with tqdm(total=len(valid_items_for_embedding), desc=f"动态批处理 {content_type}") as pbar:
-                i = 0
-                while i < len(valid_items_for_embedding):
-                    current_batch_items = []
-                    current_batch_tokens = 0
-                    while i < len(valid_items_for_embedding) and \
-                          (current_batch_tokens + len(valid_items_for_embedding[i]['data'])) <= config.MAX_TOKENS_PER_BATCH:
-                        item = valid_items_for_embedding[i]
-                        current_batch_items.append(item)
-                        current_batch_tokens += len(item['data'])
-                        i += 1
-                    
-                    if not current_batch_items and i < len(valid_items_for_embedding):
-                        current_batch_items.append(valid_items_for_embedding[i])
-                        i += 1
-
-                    if current_batch_items:
-                        batch_data = [item['data'] for item in current_batch_items]
-                        # 调用文本向量生成函数
-                        batch_vectors = self.embed_generator.get_text_embeddings(batch_data, prompt_name="passage")
-                        if batch_vectors: all_vectors.extend(batch_vectors)
-                        else: all_vectors.extend([None] * len(current_batch_items))
-                        pbar.update(len(current_batch_items))
-        
+            valid_items_for_embedding.sort(key=lambda x: len(x['text_content']), reverse=True)
         elif content_type == 'image':
-            valid_items_for_embedding.sort(key=lambda item: item['pixels'], reverse=True)
-            with tqdm(total=len(valid_items_for_embedding), desc=f"动态批处理 {content_type}") as pbar:
-                i = 0
-                while i < len(valid_items_for_embedding):
-                    current_batch_items = []
-                    current_batch_pixels = 0
-                    first_item = valid_items_for_embedding[i]
+            valid_items_for_embedding.sort(key=lambda x: x.get('pixels', 0), reverse=True)
 
-                    if first_item['pixels'] > config.MAX_IMAGE_PIXELS:
-                        current_batch_items.append(first_item)
+        total_items = len(valid_items_for_embedding)
+        processed_count = 0
+        logger.info(f"开始为 {total_items} 个有效项目生成向量并索引...")
+
+        with tqdm(total=total_items, desc=f"动态批处理与索引 {content_type}", file=sys.stdout) as pbar:
+            i = 0
+            while i < total_items:
+                current_batch_items = []
+                if content_type == 'text':
+                    current_batch_tokens = 0
+                    start_index = i
+                    while i < total_items and \
+                          (current_batch_tokens + len(valid_items_for_embedding[i]['data'])) <= config.MAX_TOKENS_PER_BATCH:
+                        current_batch_tokens += len(valid_items_for_embedding[i]['data'])
                         i += 1
-                    else:
-                        while i < len(valid_items_for_embedding) and \
-                              (current_batch_pixels + valid_items_for_embedding[i]['pixels']) <= config.MAX_IMAGE_PIXELS:
-                            item = valid_items_for_embedding[i]
-                            if not current_batch_items:
-                                current_batch_items.append(item)
-                                current_batch_pixels += item['pixels']
-                                i += 1
-                            elif i < len(valid_items_for_embedding) and \
-                                 (current_batch_pixels + valid_items_for_embedding[i]['pixels']) <= config.MAX_IMAGE_PIXELS:
-                                current_batch_items.append(valid_items_for_embedding[i])
-                                current_batch_pixels += valid_items_for_embedding[i]['pixels']
-                                i += 1
-                            else:
-                                break 
+                    if i == start_index: i += 1 
+                    current_batch_items = valid_items_for_embedding[start_index:i]
                 
-                    if current_batch_items:
-                        batch_data = [item['data'] for item in current_batch_items]
-                        batch_vectors = self.embed_generator.get_image_embeddings(batch_data)
-                        if batch_vectors:
-                            all_vectors.extend(batch_vectors)
-                        else:
-                            all_vectors.extend([None] * len(current_batch_items))
-                        pbar.update(len(current_batch_items))
+                if not current_batch_items: continue
 
-        successful_items = []
-        vectors = []
-        for item, vector in zip(valid_items_for_embedding, all_vectors):
-            if vector is not None:
-                successful_items.append(item)
-                vectors.append(vector)
+                batch_data = [item['data'] for item in current_batch_items]
+                batch_vectors = None
+                if content_type == 'text':
+                    batch_vectors = self.embed_generator.get_text_embeddings(batch_data, prompt_name="passage")
+                elif content_type == 'image':
+                    batch_vectors = self.embed_generator.get_image_embeddings(batch_data)
 
-        if not vectors or len(vectors) != len(successful_items):
-            logger.error("向量生成失败或数量不匹配，处理中止。")
-            return
-        
-        success_count = 0
-        desc_index = f"索引 {content_type} 向量到 Elasticsearch"
-        for i, item in enumerate(tqdm(successful_items, desc=desc_index)):
-            doc_id = item['doc_id']
-            vector = vectors[i]
-            if content_type == 'image':
-                if self.index_manager.index_document(doc_id, vector):
-                    success_count += 1
-            elif content_type == 'text':
-                text_content_for_es = item.get('text_content') 
-                if self.index_manager.index_document(doc_id, vector, text_content=text_content_for_es):
-                    success_count += 1
-        
-        logger.info(f"目录 {os.path.basename(directory)} 处理完成。成功索引: {success_count}/{len(successful_items)}")
+                if not batch_vectors or len(batch_vectors) != len(current_batch_items):
+                    logger.warning(f"批次 {i//len(current_batch_items) if current_batch_items else 0} 向量生成失败或数量不匹配，跳过。")
+                    pbar.update(len(current_batch_items))
+                    continue
+
+                success, _ = self.index_manager.index_batch(current_batch_items, batch_vectors)
+                processed_count += success
+                
+                pbar.update(len(current_batch_items))
+
+        logger.info(f"目录 {os.path.basename(directory)} 处理完成。总共成功索引: {processed_count}/{total_items} 个项目。")

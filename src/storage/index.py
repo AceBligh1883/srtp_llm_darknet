@@ -5,7 +5,7 @@
 from typing import List
 import numpy as np
 from elasticsearch import Elasticsearch
-
+from elasticsearch.helpers import bulk
 from src.common import config
 from src.common.logger import logger
 from src.common.data_models import SearchResult
@@ -16,6 +16,7 @@ class IndexManager:
 
     def __init__(self, db_manager: DatabaseManager):
         self.db_manager = db_manager
+        self.index_name = config.ES_INDEX
         try:
             self.es = Elasticsearch(
                 hosts=[{'host': config.ES_HOST, 'port': config.ES_PORT, 'scheme': 'http'}],
@@ -30,7 +31,7 @@ class IndexManager:
 
     def _init_index(self):
         """如果索引不存在，则创建它"""
-        if not self.es.indices.exists(index=config.ES_INDEX):
+        if not self.es.indices.exists(index=self.index_name):
             mapping = {
                 "properties": {
                     "doc_id": {"type": "integer"},
@@ -48,7 +49,17 @@ class IndexManager:
             except Exception as e:
                 logger.error(f"创建Elasticsearch索引失败: {e}")
                 raise
-
+    
+    def document_exists(self, doc_id: int) -> bool:
+        """
+        检查具有给定ID的文档是否已存在于Elasticsearch中。
+        """
+        try:
+            return self.es.exists(index=self.index_name, id=str(doc_id))
+        except Exception as e:
+            logger.error(f"检查文档存在性失败 (ID: {doc_id}): {e}")
+            return False
+        
     def index_document(self, doc_id: int, vector: np.ndarray) -> bool:
         """
         索引单个文档的向量。
@@ -56,12 +67,60 @@ class IndexManager:
         """
         try:
             doc = {"doc_id": doc_id, "vector": vector}
-            self.es.index(index=config.ES_INDEX, id=str(doc_id), document=doc)
-            logger.info(f"文档已索引到ES, ID: {doc_id}")
+            self.es.index(index=self.index_name, id=str(doc_id), document=doc)
             return True
         except Exception as e:
             logger.error(f"索引文档(ID: {doc_id})到ES失败: {e}")
             return False
+    
+    def index_batch(self, items: List[dict], vectors: List[list[float]]) -> tuple[int, int]:
+        """
+        使用 bulk API 高效地批量索引文档。
+        :param items: 包含 'doc_id' 的字典列表
+        :param vectors: 向量列表
+        :return: (成功数量, 失败数量)
+        """
+        actions = []
+        for i, item in enumerate(items):
+            doc_id = item['doc_id']
+            if i >= len(vectors) or vectors[i] is None:
+                logger.warning(f"跳过索引，因为文档ID {doc_id} 的向量为空。")
+                continue
+            vector = vectors[i]
+            
+            source = {
+                "doc_id": doc_id,
+                "vector": vector
+            }
+            
+            action = {
+                "_index": self.index_name,
+                "_id": str(doc_id),
+                "_source": source
+            }
+            actions.append(action)
+        
+        if not actions:
+            return 0, 0
+
+        try:
+            # raise_on_error=False 使得即使部分文档失败，也能继续处理
+            success_count, failed_items = bulk(self.es, actions, raise_on_error=False)
+            
+            if failed_items:
+                logger.warning(f"批量索引中有 {len(failed_items)} 个文档失败。")
+                for i, item in enumerate(failed_items):
+                    if i >= 5:
+                        logger.warning("...更多失败日志已省略...")
+                        break
+                    # 提取失败原因
+                    error_reason = item.get('index', {}).get('error', '未知错误')
+                    failed_doc_id = item.get('index', {}).get('_id', '未知ID')
+                    logger.error(f"  - 文档ID: {failed_doc_id}, 失败原因: {error_reason}")
+            return success_count, len(failed_items)
+        except Exception as e:
+            logger.error(f"批量索引过程中发生严重错误: {e}")
+            return 0, len(actions)
 
     def vector_search(self, query_vector: np.ndarray, top_k: int = 10) -> List[SearchResult]:
         """执行纯向量检索"""
@@ -73,9 +132,9 @@ class IndexManager:
                 "num_candidates": 100
             }
             response = self.es.search(
-                index=config.ES_INDEX,
+                index=self.index_name,
                 knn=knn_query,
-                _source=["doc_id"]
+                _source=["doc_id"] 
             )
             
             results = []
