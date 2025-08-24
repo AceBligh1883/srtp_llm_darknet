@@ -5,7 +5,7 @@
 import sqlite3
 import hashlib
 from datetime import datetime
-from typing import Optional
+from typing import Dict, List, Optional, Set
 
 from src.common.logger import logger
 from src.common.data_models import ContentMeta
@@ -37,7 +37,58 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"数据库初始化失败: {e}")
             raise
+    
+    def get_all_processed_hashes(self) -> Set[str]:
+        """获取数据库中所有元数据的哈希值集合，用于快速去重。"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT file_hash FROM content_meta")
+                return {row[0] for row in cursor.fetchall()}
+        except sqlite3.Error as e:
+            logger.error(f"获取所有哈希值失败: {e}")
+            return set()
 
+    def save_metadata_batch(self, metadatas: List[ContentMeta]) -> Dict[str, int]:
+        """
+        批量保存元数据到数据库。
+        返回一个从文件哈希到新生成的ID的映射。
+        """
+        if not metadatas:
+            return {}
+        
+        rows_to_insert = [
+            (m.url, m.content_type, m.file_path, m.file_hash, m.timestamp)
+            for m in metadatas
+        ]
+        
+        insert_sql = "INSERT INTO content_meta (url, content_type, file_path, file_hash, timestamp) VALUES (?, ?, ?, ?, ?)"
+        
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.executemany(insert_sql, rows_to_insert)
+                
+                hashes_to_query = [m.file_hash for m in metadatas]
+                
+                placeholders = ', '.join(['?'] * len(hashes_to_query))
+                select_sql = f"SELECT id, file_hash FROM content_meta WHERE file_hash IN ({placeholders})"
+                
+                cursor.execute(select_sql, hashes_to_query)
+                hash_to_id_map = {row[1]: row[0] for row in cursor.fetchall()}
+                conn.commit()
+                logger.info(f"成功批量保存 {len(hash_to_id_map)} 条元数据。")
+                return hash_to_id_map
+
+        except sqlite3.IntegrityError as e:
+            conn.rollback()
+            logger.error(f"批量保存元数据时发生完整性错误: {e}")
+            return {}
+        except sqlite3.Error as e:
+            conn.rollback()
+            logger.error(f"批量保存元数据到数据库失败: {e}")
+            return {}
+            
     def save_metadata(self, metadata: ContentMeta) -> Optional[int]:
         """
         保存元数据到数据库，如果文件哈希已存在则跳过。

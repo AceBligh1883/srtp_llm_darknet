@@ -2,6 +2,7 @@
 """
 只负责Elasticsearch操作的模块
 """
+import os
 from typing import List
 import numpy as np
 from elasticsearch import Elasticsearch
@@ -40,7 +41,12 @@ class IndexManager:
                         "dims": config.VECTOR_DIM,
                         "index": True,
                         "similarity": "cosine"
-                    }
+                    },
+                    "content": {
+                        "type": "text",
+                        "analyzer": "standard" 
+                    },
+                    "content_type": { "type": "keyword" } 
                 }
             }
             try:
@@ -88,9 +94,14 @@ class IndexManager:
                 continue
             vector = vectors[i]
             
+            content_to_index = item.get('text_content', '')
+            content_type_to_index = item.get('content_type', '')
+
             source = {
                 "doc_id": doc_id,
-                "vector": vector
+                "vector": vector,
+                "content": content_to_index,
+                "content_type": content_type_to_index
             }
             
             action = {
@@ -104,7 +115,6 @@ class IndexManager:
             return 0, 0
 
         try:
-            # raise_on_error=False 使得即使部分文档失败，也能继续处理
             success_count, failed_items = bulk(self.es, actions, raise_on_error=False)
             
             if failed_items:
@@ -113,7 +123,6 @@ class IndexManager:
                     if i >= 5:
                         logger.warning("...更多失败日志已省略...")
                         break
-                    # 提取失败原因
                     error_reason = item.get('index', {}).get('error', '未知错误')
                     failed_doc_id = item.get('index', {}).get('_id', '未知ID')
                     logger.error(f"  - 文档ID: {failed_doc_id}, 失败原因: {error_reason}")
@@ -122,20 +131,47 @@ class IndexManager:
             logger.error(f"批量索引过程中发生严重错误: {e}")
             return 0, len(actions)
 
-    def vector_search(self, query_vector: np.ndarray, top_k: int = 10) -> List[SearchResult]:
-        """执行纯向量检索"""
+    def hybrid_search(self, query_text: str, query_vector: np.ndarray, top_k: int = 10, content_type_filter: str = None) -> List[SearchResult]:
+        """
+        执行混合搜索，结合了k-NN向量搜索和BM25关键词搜索。
+        """
         try:
             knn_query = {
                 "field": "vector",
                 "query_vector": query_vector,
                 "k": top_k,
-                "num_candidates": 100
+                "num_candidates": 100 
             }
+            keyword_query = {
+                "match": {
+                    "content": {
+                        "query": query_text,
+                        "boost": 0.2
+                    }
+                }
+            }
+
+            query_body = {
+                "knn": knn_query,
+                "query": keyword_query,
+                "size": top_k
+            }
+
+            if content_type_filter:
+                query_body["query"] = {
+                    "bool": {
+                        "must": [keyword_query],
+                        "filter": [
+                            {"term": {"content_type": content_type_filter}}
+                        ]
+                    }
+                }
+
             response = self.es.search(
                 index=self.index_name,
-                knn=knn_query,
-                _source=["doc_id"] 
+                **query_body
             )
+            
             
             results = []
             for hit in response["hits"]["hits"]:
@@ -147,4 +183,44 @@ class IndexManager:
             return results
         except Exception as e:
             logger.error(f"向量检索失败: {e}")
+            return []
+
+    def vector_search(self, query_vector: np.ndarray, top_k: int = 10, content_type_filter: str = None) -> List[SearchResult]:
+        """执行纯向量k-NN检索"""
+        try:
+            knn_query = {
+                "field": "vector",
+                "query_vector": query_vector,
+                "k": top_k,
+                "num_candidates": 100
+            }
+            
+            query_body = {
+                "knn": knn_query,
+                "_source": ["doc_id"]
+            }
+            if content_type_filter:
+                query_body["query"] = {
+                    "bool": {
+                        "filter": [
+                            {"term": {"content_type": content_type_filter}}
+                        ]
+                    }
+                }
+
+            response = self.es.search(
+                index=self.index_name,
+                **query_body
+            )
+
+            results = []
+            for hit in response["hits"]["hits"]:
+                doc_id = int(hit["_source"]["doc_id"])
+                score = float(hit["_score"]) 
+                metadata = self.db_manager.get_metadata_by_id(doc_id)
+                if metadata:
+                    results.append(SearchResult(doc_id=doc_id, score=score, metadata=metadata))
+            return results
+        except Exception as e:
+            logger.error(f"向量检索失败: {e}", exc_info=True)
             return []

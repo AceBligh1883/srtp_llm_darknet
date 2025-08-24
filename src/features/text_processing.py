@@ -9,7 +9,7 @@ class TextProcessor:
     """为模型准备文本"""
 
     def __init__(self):
-        self.html_tags_pattern = re.compile(r'<[^>]+>')
+        self.html_tags_pattern = re.compile(r'<.*?>') 
         self.extra_whitespace_pattern = re.compile(r'\s+')
 
     def process(self, text: str) -> str:

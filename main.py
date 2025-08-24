@@ -2,8 +2,8 @@
 import os
 import time
 import argparse
-
 import asyncio
+
 from src.crawler.coordinator import Coordinator
 from src.crawler.worker import Worker
 
@@ -12,31 +12,8 @@ from src.common.logger import logger
 from src.pipeline.processing import ProcessingPipeline
 from src.search.engine import SearchEngine
 from src.search.rag_engine import RAGEngine
+from src.ui.display import display_search_results, display_rag_answer
 
-from rich.console import Console
-from rich.panel import Panel
-from rich.markdown import Markdown
-from rich.text import Text
-from rich.table import Table
-
-def _read_snippet_from_file(file_path: str, max_len: int = 300) -> tuple[str, bool]:
-    """
-    从文件路径安全地读取一个内容片段。
-    返回 (内容片段, 是否被截断) 的元组。
-    """
-    if not os.path.exists(file_path):
-        return "[内容文件不存在]", False
-    try:
-        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-            content = f.read(max_len + 1)
-        
-        was_truncated = len(content) > max_len
-        snippet = content[:max_len] if was_truncated else content
-        return snippet, was_truncated
-
-    except Exception as e:
-        return f"[读取文件时出错: {e}]", False
-    
 def setup_dirs():
     """确保所有必要的输入数据目录存在"""
     dirs = [config.TEXT_DIR, config.IMAGE_DIR]
@@ -78,7 +55,8 @@ def handle_process(args: argparse.Namespace):
 
 def handle_search(args: argparse.Namespace):
     """处理内容检索命令"""
-    if not (args.search_text or args.search_image):
+    query_term = args.search_text or args.search_image
+    if not query_term:
         return
 
     engine = SearchEngine()
@@ -86,98 +64,27 @@ def handle_search(args: argparse.Namespace):
         results = engine.search_by_text(args.search_text, args.limit)
     elif args.search_image:
         results = engine.search_by_image(args.search_image, args.limit)
-    else:
-        return
 
-    console = Console()
-    query_term = args.search_text or args.search_image
-
-    console.print(f"\n[bold green]与 “{query_term}” 相关的 {len(results)} 个结果[/bold green]\n")
-
-    if not results:
-        console.print(Panel("[yellow]未找到任何相关结果。[/yellow]", title="提示", border_style="yellow"))
-        return
-    
-    for i, res in enumerate(results, 1):
-        was_truncated = False
-        if res.metadata.content_type == 'text':
-            content_snippet, was_truncated = _read_snippet_from_file(res.metadata.file_path)
-        else: # 对于图片等其他类型
-            content_snippet = f"图像文件，路径: {res.metadata.file_path}"
-
-        highlighted_snippet = Text(content_snippet)
-        if args.search_text:
-             highlighted_snippet.highlight_words(args.search_text.split(), "bold magenta on white")
-
-        meta_table = Table.grid(expand=True)
-        meta_table.add_column(style="dim cyan", no_wrap=True) # 标签列
-        meta_table.add_column(ratio=1) # 内容列
-        meta_table.add_row("文件:", f" {os.path.basename(res.metadata.file_path)}")
-        meta_table.add_row("类型:", f" {res.metadata.content_type}")
-        panel_body = Table.grid(expand=True, padding=0)
-        panel_body.add_column()
-        panel_body.add_row(meta_table)
-        panel_body.add_row("") # 空行
-        panel_body.add_row(highlighted_snippet)
-
-        if was_truncated:
-            full_path_text = Text()
-            full_path_text.append("\n... [查看完整内容]: ", style="dim")
-            full_path_text.append(res.metadata.file_path, style="dim underline")
-            panel_body.add_row(full_path_text)
-
-        result_panel = Panel(
-            panel_body,
-            title=f"[bold cyan]#{i}[/bold cyan] [white]Score:[/white] [bold yellow]{res.score:.4f}[/bold yellow]",
-            border_style="blue",
-            expand=False,
-            padding=(1, 2)
-        )
-        console.print(result_panel)
-        console.print()
-
+    display_search_results(results, query_term)
 
 def handle_rag(args: argparse.Namespace):
     """处理RAG问答命令"""
     if not (args.ask or args.query_image):
         return
-    console = Console()
-    console.print()
 
-    if args.ask:
-        question = args.ask
-        query_display = f"[bold]Q:[/bold] {question}"
-        
-        with console.status("[bold cyan]AI正在思考中...[/bold cyan]", spinner="dots"):
-            rag_engine = RAGEngine()
+    rag_engine = RAGEngine()
+    question = args.ask
+    image_path = args.query_image
+    answer = ""
+
+    from rich.console import Console 
+    with Console().status("[bold cyan]AI正在思考中...[/bold cyan]", spinner="dots"):
+        if question:
             answer = rag_engine.ask(question)
-
-    elif args.query_image:
-        image_path = args.query_image
-        query_display = f"[bold]Image Query:[/bold] {image_path}"
-
-        with console.status("[bold cyan]AI正在分析图像并思考...[/bold cyan]", spinner="dots"):
-            rag_engine = RAGEngine()
+        elif image_path:
             answer = rag_engine.ask_with_image(image_path)
-
-    question_panel = Panel(
-        query_display,
-        title="[bold yellow]您的查询[/bold yellow]",
-        border_style="yellow",
-        expand=False
-    )
     
-    answer_markdown = Markdown(answer)
-    answer_panel = Panel(
-        answer_markdown,
-        title="[bold green]AI的回答[/bold green]",
-        border_style="green",
-        expand=False
-    )
-    
-    console.print(question_panel)
-    console.print(answer_panel)
-    console.print()
+    display_rag_answer(question, answer, image_path)
 
 def main():
     parser = argparse.ArgumentParser(description="暗网多模态分析与检索系统")
@@ -211,7 +118,7 @@ def main():
         return
 
     start_time = time.time()
-    logger.info("系统启动...")
+    logger.debug("系统启动...")
     
     setup_dirs()
     handle_crawler(args)

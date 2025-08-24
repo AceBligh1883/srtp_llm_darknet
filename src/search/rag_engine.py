@@ -34,12 +34,12 @@ class RAGEngine:
 你的回答:
 """
     REWRITE_PROMPT_TEMPLATE = """
-你的任务是将复杂的用户问题分解成一个或多个简洁的、适合向量数据库检索的关键词查询。以 Python 列表的格式返回。
+你的任务是将复杂的用户问题分解成一个或多个简洁的、多语言的、适合向量数据库检索的关键词查询。以 Python 列表的格式返回。
 
 --- 示例 ---
 用户问题: '告诉我关于AR-15的规格，以及它和AK-47的比较'
 你的回答:
-["AR-15 规格", "AR-15 与 AK-47 比较"]
+["AR-15 规格", "AR-15 与 AK-47 比较", "AR-15 Specs", "AR-15 vs. AK-47 Comparison"]
 --- 示例结束 ---
 
 CRITICAL: 你的整个回答必须只有 Python 列表，不能有任何周围的文字、解释或Markdown标记。
@@ -51,10 +51,10 @@ CRITICAL: 你的整个回答必须只有 Python 列表，不能有任何周围�
     DEFAULT_IMAGE_QUESTION = "请描述所提供材料的内容，包括图像中可见的任何文本或物体。场景中正在发生什么？"
 
     def __init__(self):
-        logger.info("正在初始化RAG引擎...")
+        logger.debug("正在初始化RAG引擎...")
         self.search_engine = SearchEngine()
         self.llm_client = GeminiClient()
-        logger.info("RAG引擎初始化成功。")
+        logger.debug("RAG引擎初始化成功。")
 
     def _rewrite_query(self, question: str) -> List[str]:
         prompt = self.REWRITE_PROMPT_TEMPLATE.format(question=question)
@@ -109,7 +109,7 @@ CRITICAL: 你的整个回答必须只有 Python 列表，不能有任何周围�
         """
         执行完整的RAG流程来回答问题。
         """
-        logger.info(f"收到RAG问题:'{question[:50]}...'")
+        logger.debug(f"收到RAG问题:'{question[:50]}...'")
         
         sub_queries = self._rewrite_query(question)
         queries_to_search = set(sub_queries)
@@ -161,8 +161,8 @@ CRITICAL: 你的整个回答必须只有 Python 列表，不能有任何周围�
     def ask_with_image(self, image_path: str) -> str:
         logger.info(f"收到RAG图像查询: '{image_path}'")
         search_results = self.search_engine.search_by_image(
-            image_path=image_path,
-            top_k=config.RAG_TOP_K
+            image_path,
+            config.RAG_TOP_K
         )
         if not search_results:
             logger.warning("未能根据图像找到任何相关文档。")

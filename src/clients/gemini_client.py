@@ -35,7 +35,7 @@ class GeminiClient:
             "stream": False 
         }
 
-        logger.info(f"正在向Gemini代理发送请求，使用模型: {self.model}")
+        logger.debug(f"正在向Gemini代理发送请求，使用模型: {self.model}")
 
         try:
             response = requests.post(
