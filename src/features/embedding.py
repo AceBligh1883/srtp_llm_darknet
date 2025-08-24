@@ -17,8 +17,14 @@ class EmbeddingGenerator:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         logger.debug(f"EmbeddingGenerator 将使用设备: {self.device}")
         model_id = config.MODEL_NAME
+
+        model_kwargs = {}
+        if self.device == "cuda":
+            model_kwargs['torch_dtype'] = torch.float16
+            model_kwargs['attn_implementation'] = "flash_attention_2"
+
         try:
-            self.model = AutoModel.from_pretrained(model_id).to(self.device)
+            self.model = AutoModel.from_pretrained(model_id, **model_kwargs).to(self.device)
             self.processor = AutoProcessor.from_pretrained(model_id, use_fast=True)
             logger.debug(f"成功加载模型: {config.MODEL_NAME}")
         except Exception as e:
@@ -28,7 +34,13 @@ class EmbeddingGenerator:
     def get_text_embeddings(self, texts: List[str]) -> List[List[float]]:
         """获取文本的向量"""
         try:
-            inputs = self.processor(text=texts, padding=True, return_tensors="pt", truncation=True).to(self.device)
+            prompted_texts = [f"This is a photo of {text}" for text in texts]
+            inputs = self.processor(
+                text=prompted_texts, 
+                padding="max_length", 
+                return_tensors="pt", 
+                truncation=True
+            ).to(self.device)
             with torch.no_grad():
                 text_features = self.model.get_text_features(**inputs)
             text_features = text_features / text_features.norm(p=2, dim=-1, keepdim=True)

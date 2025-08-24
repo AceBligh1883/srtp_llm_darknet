@@ -57,35 +57,38 @@ class DatabaseManager:
         if not metadatas:
             return {}
         
-        rows_to_insert = [
-            (m.url, m.content_type, m.file_path, m.file_hash, m.timestamp)
-            for m in metadatas
-        ]
-        
-        insert_sql = "INSERT INTO content_meta (url, content_type, file_path, file_hash, timestamp) VALUES (?, ?, ?, ?, ?)"
-        
+        CHUNK_SIZE = 900
+        total_hash_to_id_map = {}
+
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                cursor.executemany(insert_sql, rows_to_insert)
                 
-                hashes_to_query = [m.file_hash for m in metadatas]
-                
-                placeholders = ', '.join(['?'] * len(hashes_to_query))
-                select_sql = f"SELECT id, file_hash FROM content_meta WHERE file_hash IN ({placeholders})"
-                
-                cursor.execute(select_sql, hashes_to_query)
-                hash_to_id_map = {row[1]: row[0] for row in cursor.fetchall()}
-                conn.commit()
-                logger.info(f"成功批量保存 {len(hash_to_id_map)} 条元数据。")
-                return hash_to_id_map
+                for i in range(0, len(metadatas), CHUNK_SIZE):
+                    chunk = metadatas[i:i + CHUNK_SIZE]
+                    
+                    rows_to_insert = [
+                        (m.url, m.content_type, m.file_path, m.file_hash, m.timestamp)
+                        for m in chunk
+                    ]
+                    
+                    insert_sql = "INSERT INTO content_meta (url, content_type, file_path, file_hash, timestamp) VALUES (?, ?, ?, ?, ?)"
+                    cursor.executemany(insert_sql, rows_to_insert)
+                    
+                    hashes_to_query = [m.file_hash for m in chunk]
+                    placeholders = ', '.join(['?'] * len(hashes_to_query))
+                    select_sql = f"SELECT id, file_hash FROM content_meta WHERE file_hash IN ({placeholders})"
+                    
+                    cursor.execute(select_sql, hashes_to_query)
+                    chunk_map = {row[1]: row[0] for row in cursor.fetchall()}
+                    total_hash_to_id_map.update(chunk_map)
 
-        except sqlite3.IntegrityError as e:
-            conn.rollback()
-            logger.error(f"批量保存元数据时发生完整性错误: {e}")
-            return {}
+                conn.commit()
+                logger.info(f"成功分块批量保存 {len(total_hash_to_id_map)} 条元数据。")
+                return total_hash_to_id_map
+
         except sqlite3.Error as e:
-            conn.rollback()
+            if 'conn' in locals() and conn: conn.rollback()
             logger.error(f"批量保存元数据到数据库失败: {e}")
             return {}
             

@@ -194,20 +194,16 @@ class IndexManager:
                 "k": top_k,
                 "num_candidates": 100
             }
-            
+            if content_type_filter:
+                knn_query["filter"] = {
+                    "term": {
+                        "content_type": content_type_filter
+                    }
+                }
             query_body = {
                 "knn": knn_query,
                 "_source": ["doc_id"]
             }
-            if content_type_filter:
-                query_body["query"] = {
-                    "bool": {
-                        "filter": [
-                            {"term": {"content_type": content_type_filter}}
-                        ]
-                    }
-                }
-
             response = self.es.search(
                 index=self.index_name,
                 **query_body
