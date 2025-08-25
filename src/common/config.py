@@ -4,6 +4,7 @@
 import os
 from typing import List, Tuple
 
+# 导入私有配置
 try:
     from .private_config import *
 except ImportError:
@@ -35,17 +36,19 @@ SUPPORTED_IMAGE_FORMATS: Tuple[str, ...] = (".jpg", ".jpeg", ".png", ".bmp")
 
 # 模型配置
 MODEL_NAME: str = "google/siglip-base-patch16-256-multilingual"
+VECTOR_DIM: int = 768 
 
 # LLM (用于RAG)
 RAG_TOP_K: int = 10
 DEFAULT_MODEL: str = "gemini-2.5-pro"
-VECTOR_DIM: int = 768 
+
 # 性能与并发配置
 MAX_TOKENS_PER_BATCH: int = 65536
 MIN_TEXT_LENGTH: int = 100
 #MAX_TEXT_CHARS: int = 8192
 MAX_IMAGE_PIXELS: int = 2048 * 2048
 MAX_ITEMS_PER_BATCH = 32 
+
 # 存储与数据库配置
 ES_INDEX: str = "darknet_multimodal_index"
 ES_TIMEOUT: int = 30

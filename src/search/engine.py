@@ -12,6 +12,7 @@ from src.storage.index import IndexManager
 from src.features.embedding import EmbeddingGenerator
 from src.features.text_processing import TextProcessor
 from src.features.image_processing import ImageProcessor
+from src.features.translator import translate_to_english
 
 class SearchEngine:
     """
@@ -64,7 +65,8 @@ class SearchEngine:
                 return []
         else:
             logger.info(f"检测到文本查询，执行文搜图: '{query_input}'")
-            processed_query = self.text_processor.process(query_input)
+            translated_query = translate_to_english(query_input)
+            processed_query = self.text_processor.process(translated_query)
             text_vectors = self.embed_generator.get_text_embeddings([processed_query])
             if text_vectors:
                 query_vector = text_vectors[0]

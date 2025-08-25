@@ -32,7 +32,15 @@ class EmbeddingGenerator:
             raise
 
     def get_text_embeddings(self, texts: List[str]) -> List[List[float]]:
-        """获取文本的向量"""
+        """
+        为一批文本生成向量嵌入。
+
+        Args:
+            texts (List[str]): 待处理的原始文本字符串列表。
+
+        Returns:
+            List[List[float]]: 每个文本对应的向量嵌入列表。如果失败则返回None。
+        """
         try:
             prompted_texts = [f"This is a photo of {text}" for text in texts]
             inputs = self.processor(
@@ -41,8 +49,10 @@ class EmbeddingGenerator:
                 return_tensors="pt", 
                 truncation=True
             ).to(self.device)
+
             with torch.no_grad():
                 text_features = self.model.get_text_features(**inputs)
+            
             text_features = text_features / text_features.norm(p=2, dim=-1, keepdim=True)
             return text_features.cpu().tolist()
         except Exception as e:

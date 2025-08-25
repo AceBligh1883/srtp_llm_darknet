@@ -10,6 +10,10 @@ class GeminiClient:
     通过兼容OpenAI格式的代理API调用Gemini模型的客户端。
     """
     def __init__(self):
+        """
+        初始化Gemini客户端。
+        从配置文件中加载API的URL、密钥和要使用的模型名称。
+        """
         self.api_url = config.GEMINI_API_URL
         self.api_key = config.GEMINI_API_KEY
         self.model = config.DEFAULT_MODEL 
@@ -19,7 +23,13 @@ class GeminiClient:
 
     def generate(self, prompt: str) -> str:
         """
-        向代理API发送请求并获取模型生成的内容。
+        向代理API发送一个prompt，并获取模型生成的文本内容。
+
+        Args:
+            prompt (str): 发送给语言模型的用户输入提示。
+
+        Returns:
+            str: 模型生成的回答。如果发生错误，则返回一条包含错误信息的提示性字符串。
         """
         headers = {
             "Content-Type": "application/json",

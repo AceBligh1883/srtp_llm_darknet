@@ -7,7 +7,9 @@ from typing import Optional
 
 @dataclass
 class ContentMeta:
-    """内容元数据模型（存储在SQLite中）"""
+    """
+    内容元数据模型，代表存储在SQLite数据库中的一条记录。
+    """
     id: Optional[int] = None
     url: str = "local"
     content_type: str = "unknown"
