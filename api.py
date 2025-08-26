@@ -11,17 +11,10 @@ from src.search.engine import SearchEngine
 from src.search.rag_engine import RAGEngine
 from src.common.data_models import SearchResult 
 
-# --- 初始化应用和引擎 ---
-
 engines = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    定义应用的生命周期事件。
-    在 'yield' 之前的代码会在应用启动时执行。
-    在 'yield' 之后的代码会在应用关闭时执行。
-    """
     logger.info("应用启动... 正在加载核心引擎...")
     try:
         engines["search_engine"] = SearchEngine()
@@ -50,12 +43,6 @@ app = FastAPI(
     lifespan=lifespan,
     servers=servers
 )
-
-
-@app.get("/", summary="健康检查", description="检查API服务是否正在运行。")
-def health_check():
-    """一个简单的端点，用于确认服务是否在线。"""
-    return {"status": "ok", "message": "API is running"}
 
 @app.post("/search-text", summary="文本搜索", response_model=List[SearchResult])
 async def api_search_text(query: str = Form(...), top_k: int = Form(10)):
@@ -95,7 +82,7 @@ async def api_search_image(
         raise HTTPException(status_code=400, detail="必须提供 'query_text' 或 'image_file'。")
 
     query_input = ""
-    temp_file_path = "" # 确保变量已定义
+    temp_file_path = "" 
     try:
         if image_file:
             temp_dir = "temp_uploads"

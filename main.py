@@ -79,10 +79,10 @@ def handle_rag(args: argparse.Namespace):
 
     from rich.console import Console 
     with Console().status("[bold cyan]AI正在思考中...[/bold cyan]", spinner="dots"):
-        if question:
+        if image_path:
+            answer = rag_engine.ask_with_image(image_path, question)
+        elif question:
             answer = rag_engine.ask(question)
-        elif image_path:
-            answer = rag_engine.ask_with_image(image_path)
     
     display_rag_answer(question, answer, image_path)
 
@@ -108,8 +108,8 @@ def main():
     search_group.add_argument('--search-image', metavar='IMAGE_PATH', help='根据图像查询相似内容')
     
     rag_group = parser.add_argument_group('RAG问答命令')
-    rag_group.add_argument('--ask', type=str, help='向RAG引擎提问，获取基于上下文的智能回答')
-    rag_group.add_argument('--query-image', type=str, help='使用图像文件路径向RAG引擎提问')
+    rag_group.add_argument('--ask', type=str, help='向RAG引擎提问。可与 --query-image 组合使用，对图像进行提问。')
+    rag_group.add_argument('--query-image', type=str, help='提供图像文件路径作为RAG的主要上下文。')
 
     args = parser.parse_args()
     

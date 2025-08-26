@@ -1,9 +1,12 @@
 # src/clients/gemini_client.py
 
+import base64
+import io
 import requests
 import json
 from src.common import config
 from src.common.logger import logger
+from PIL import Image
 
 class GeminiClient:
     """
@@ -21,7 +24,13 @@ class GeminiClient:
         if not self.api_url or not self.api_key:
             raise ValueError("GEMINI_API_URL and GEMINI_API_KEY must be set in the config file.")
 
-    def generate(self, prompt: str) -> str:
+    def _image_to_base64(self, pil_image: Image.Image) -> str:
+        """将PIL图像对象转换为Base64编码的字符串"""
+        buffered = io.BytesIO()
+        pil_image.save(buffered, format="JPEG")
+        return base64.b64encode(buffered.getvalue()).decode('utf-8')
+    
+    def generate(self, prompt: str, pil_image: Image.Image = None) -> str:
         """
         向代理API发送一个prompt，并获取模型生成的文本内容。
 
@@ -35,12 +44,26 @@ class GeminiClient:
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}"
         }
+        messages = []
+        if pil_image:
+            base64_image = self._image_to_base64(pil_image)
+            content = [
+                {"type": "text", "text": prompt},
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{base64_image}"
+                    }
+                }
+            ]
+            messages.append({"role": "user", "content": content})
+        
+        else:
+            messages.append({"role": "user", "content": prompt})
 
         payload = {
             "model": self.model,
-            "messages": [
-                {"role": "user", "content": prompt}
-            ],
+            "messages": messages,
             "temperature": 0.7,
             "stream": False 
         }
