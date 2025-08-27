@@ -3,13 +3,12 @@ import os
 import time
 import argparse
 import asyncio
-
 from src.crawler.coordinator import Coordinator
 from src.crawler.worker import Worker
-
 from src.common import config
 from src.common.logger import logger
 from src.pipeline.processing import ProcessingPipeline
+from src.pipeline.kg_pipeline import run_kg_construction_pipeline
 from src.search.engine import SearchEngine
 from src.search.rag_engine import RAGEngine
 from src.ui.display import display_search_results, display_rag_answer
@@ -86,6 +85,12 @@ def handle_rag(args: argparse.Namespace):
     
     display_rag_answer(question, answer, image_path)
 
+def handle_kg_build(args: argparse.Namespace):
+    """处理知识图谱构建命令。"""
+    if not args.build_kg:
+        return
+    run_kg_construction_pipeline()
+
 def main():
     parser = argparse.ArgumentParser(description="暗网多模态分析与检索系统")
 
@@ -111,6 +116,9 @@ def main():
     rag_group.add_argument('--ask', type=str, help='向RAG引擎提问。可与 --query-image 组合使用，对图像进行提问。')
     rag_group.add_argument('--query-image', type=str, help='提供图像文件路径作为RAG的主要上下文。')
 
+    kg_group = parser.add_argument_group('知识图谱命令')
+    kg_group.add_argument('--build-kg', action='store_true', help='从所有文本文档中提取知识并构建图谱')
+
     args = parser.parse_args()
     
     if not any(vars(args).values()):
@@ -125,6 +133,7 @@ def main():
     handle_process(args)
     handle_search(args)
     handle_rag(args)
+    handle_kg_build(args)
     
     elapsed = time.time() - start_time
     logger.info(f"操作完成，总耗时: {elapsed:.2f} 秒")

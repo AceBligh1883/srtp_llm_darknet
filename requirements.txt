@@ -4,6 +4,7 @@ beautifulsoup4==4.13.5
 elasticsearch==8.14.0
 fastapi==0.116.1
 flash_attn==2.7.4.post1
+neo4j==5.28.2
 numpy==2.3.0
 Pillow==11.3.0
 protobuf==6.32.0
@@ -14,6 +15,7 @@ rich==14.1.0
 selenium==4.35.0
 sentence_transformers==5.1.0
 sentencepiece==0.2.1
+tenacity==9.1.2
 torch==2.7.1+cu128
 tqdm==4.67.1
 transformers==4.55.2

@@ -2,6 +2,7 @@
 """
 只负责SQLite元数据管理的模块
 """
+import os
 import sqlite3
 import hashlib
 from datetime import datetime
@@ -32,7 +33,14 @@ class DatabaseManager:
                         timestamp TEXT NOT NULL
                     )
                 """)
+                cursor.execute("PRAGMA table_info(content_meta)")
+                columns = [row[1] for row in cursor.fetchall()]
+
+                if 'kg_processed' not in columns:
+                    cursor.execute("ALTER TABLE content_meta ADD COLUMN kg_processed INTEGER DEFAULT 0")
+
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_file_hash ON content_meta(file_hash)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_kg_processed ON content_meta(kg_processed)")
                 conn.commit()
         except Exception as e:
             logger.error(f"数据库初始化失败: {e}")
@@ -149,3 +157,43 @@ class DatabaseManager:
             file_hash=file_hash,
             timestamp=datetime.now().isoformat()
         )
+
+    def get_unprocessed_kg_files(self) -> list[str]:
+        """
+        从数据库中获取所有尚未进行知识图谱处理的文本文件的路径。
+
+        Returns:
+            list[str]: 未处理文件的路径列表。
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT file_path FROM content_meta 
+                    WHERE content_type = 'text' AND (kg_processed = 0 OR kg_processed IS NULL)
+                """)
+                files = [row[0] for row in cursor.fetchall()]
+                return files
+        except Exception as e:
+            logger.error(f"查询未处理的KG文件失败: {e}")
+            return []
+
+    def mark_kg_processed(self, file_path: str):
+        """
+        将指定文件在数据库中的状态标记为已进行知识图谱处理。
+
+        Args:
+            file_path (str): 要标记的文件的路径。
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "UPDATE content_meta SET kg_processed = 1 WHERE file_path = ?",
+                    (file_path,)
+                )
+                conn.commit()
+                if cursor.rowcount > 0:
+                    logger.debug(f"已将文件 '{os.path.basename(file_path)}' 标记为KG已处理。")
+        except Exception as e:
+            logger.error(f"标记文件 '{file_path}' 为KG已处理时失败: {e}")

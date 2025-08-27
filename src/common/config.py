@@ -40,7 +40,7 @@ VECTOR_DIM: int = 768
 
 # LLM (用于RAG)
 RAG_TOP_K: int = 10
-DEFAULT_MODEL: str = "gemini-2.5-pro"
+DEFAULT_MODEL: str = "gemini-2.5-flash-free"
 
 # 性能与并发配置
 MAX_TOKENS_PER_BATCH: int = 65536

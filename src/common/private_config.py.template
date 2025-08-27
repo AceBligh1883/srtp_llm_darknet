@@ -19,3 +19,8 @@ TOR_BROWSER_BINARY: str = "在此处填入您的firefox.exe的绝对路径"
 
 # 网络代理配置
 TOR_PROXY: str = "socks5://127.0.0.1:9150"
+
+# Neo4j 图数据库配置 
+NEO4J_URI: str = "bolt://localhost:7687"
+NEO4J_USER: str = "neo4j"
+NEO4J_PASSWORD: str = "在此处填入您的密码" 
