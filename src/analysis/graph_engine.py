@@ -8,7 +8,6 @@ from neo4j import GraphDatabase, exceptions
 from src.common import config, schema
 from src.common.logger import logger
 from src.clients.gemini_client import GeminiClient
-
 class KnowledgeGraphEngine:
     """
     负责从文本中提取知识三元组并构建知识图谱。

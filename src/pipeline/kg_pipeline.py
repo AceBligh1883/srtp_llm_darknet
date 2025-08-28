@@ -1,11 +1,9 @@
 import os
-import glob
 import traceback
-from typing import Optional
-
 from src.common import config
 from src.common.logger import logger
 from src.analysis.graph_engine import KnowledgeGraphEngine
+from src.storage.database import DatabaseManager
 
 def run_kg_construction_pipeline():
     """
@@ -19,11 +17,17 @@ def run_kg_construction_pipeline():
     """
     logger.info("启动知识图谱构建流程...")
     engine = KnowledgeGraphEngine()
-    
+    db_manager = DatabaseManager(config.DB_PATH)
+
     try:
-        text_files = glob.glob(os.path.join(config.TEXT_DIR, '**', '*.txt'), recursive=True)
+        text_files = db_manager.get_unprocessed_kg_files()
         total_files = len(text_files)
-        logger.info(f"发现 {total_files} 个文本文档可供处理。")
+
+        if total_files == 0:
+            logger.info("没有需要处理的新文件。知识图谱构建流程结束。")
+            return 
+        
+        logger.info(f"发现 {total_files} 个新的文本文档需要处理。")
 
         for i, file_path in enumerate(text_files):
             doc_id = os.path.basename(file_path)
@@ -34,10 +38,12 @@ def run_kg_construction_pipeline():
                     content = f.read()
                 if len(content.strip()) < config.MIN_TEXT_LENGTH:
                     logger.warning(f"文档 {doc_id} 内容过短，跳过。")
+                    db_manager.mark_kg_processed(file_path)
                     continue
                 triples = engine.extract_triples_from_text(content, doc_id)
                 if triples:
-                    engine.add_triples_to_graph(triples, doc_id)
+                    engine.add_triples_to_graph(triples, doc_id)    
+                db_manager.mark_kg_processed(file_path)
 
             except Exception:
                 error_details = traceback.format_exc()
