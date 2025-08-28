@@ -154,7 +154,6 @@ class ProcessingPipeline:
 
                 if not current_batch_items: continue
 
-                t_batch_created = time.time()
 
                 batch_data = [item['data'] for item in current_batch_items]
                 batch_vectors = None
@@ -162,8 +161,6 @@ class ProcessingPipeline:
                     batch_vectors = self.embed_generator.get_text_embeddings(batch_data)
                 elif content_type == 'image':
                     batch_vectors = self.embed_generator.get_image_embeddings(batch_data)
-
-                t_vectors_generated = time.time()
 
                 if not batch_vectors or len(batch_vectors) != len(current_batch_items):
                     logger.warning(f"批次 {i//len(current_batch_items) if current_batch_items else 0} 向量生成失败或数量不匹配，跳过。")

@@ -16,7 +16,8 @@ class ContentMeta:
     file_path: str = ""
     file_hash: str = ""
     timestamp: str = ""
-
+    kg_processed: int = 0
+    
 @dataclass
 class SearchResult:
     """统一的搜索结果模型"""
