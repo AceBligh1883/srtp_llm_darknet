@@ -38,9 +38,11 @@ SUPPORTED_IMAGE_FORMATS: Tuple[str, ...] = (".jpg", ".jpeg", ".png", ".bmp")
 MODEL_NAME: str = "google/siglip-base-patch16-256-multilingual"
 VECTOR_DIM: int = 768 
 
+RERANKER_MODEL: str = "BAAI/bge-reranker-v2-m3"
+
 # LLM (用于RAG)
 RAG_TOP_K: int = 10
-DEFAULT_MODEL: str = "gemini-2.5-flash-free"
+DEFAULT_MODEL: str = "gemini-2.5-pro"
 
 # 性能与并发配置
 MAX_TOKENS_PER_BATCH: int = 65536

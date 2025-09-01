@@ -37,14 +37,15 @@ class SearchEngine:
             logger.error("查询文本向量生成失败。")
             return []
         query_vector = query_vectors[0]
-        results = self.index_manager.hybrid_search(
-            query, 
-            query_vector, 
-            top_k, 
-            content_type_filter='text'
+        text_results = self.index_manager.hybrid_search(
+            query, query_vector, top_k, content_type_filter='text'
         )
-        
-        return results
+        image_results = self.index_manager.vector_search(
+            query_vector, top_k, content_type_filter='image'
+        )
+        combined_results = text_results + image_results
+        combined_results.sort(key=lambda x: x.score, reverse=True)
+        return combined_results
 
     def search_by_image(self, query_input: str, top_k: int) -> List[SearchResult]:
         """
@@ -75,9 +76,12 @@ class SearchEngine:
             logger.error(f"为查询 '{query_input}' 生成向量失败。")
             return []
         
-        results = self.index_manager.vector_search(
-            query_vector, 
-            top_k=top_k, 
-            content_type_filter='image'
+        image_results = self.index_manager.vector_search(
+            query_vector, top_k, content_type_filter='image'
         )
-        return results
+        text_results = self.index_manager.vector_search(
+            query_vector, top_k, content_type_filter='text'
+        )
+        combined_results = text_results + image_results
+        combined_results.sort(key=lambda x: x.score, reverse=True)
+        return combined_results

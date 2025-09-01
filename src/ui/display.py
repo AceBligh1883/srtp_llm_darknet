@@ -7,7 +7,10 @@ from rich.panel import Panel
 from rich.markdown import Markdown
 from rich.text import Text
 from rich.table import Table
+from src.search.rag_engine import RAGEngine
+from src.common.logger import logger
 from src.common.data_models import SearchResult
+from src.ui.display_enhancements import display_image_in_terminal 
 
 def _read_snippet_from_file(file_path: str, max_len: int = 300) -> tuple[str, bool]:
     """从文件路径安全地读取一个内容片段。"""
@@ -73,31 +76,61 @@ def display_search_results(results: List[SearchResult], query: str):
         console.print(result_panel)
         console.print()
 
-def display_rag_answer(question: str, answer: str, image_path: str = None):
-    """使用 rich 库格式化并打印RAG问答结果"""
+def render_rich_report(rag_engine, report_draft: str):
+    """
+    解析并渲染包含图像占位符的报告草稿。
+    """
+    report_table = Table.grid(padding=(0, 1, 1, 1))
+    report_table.add_column()
+    parts = re.split(r'(\[IMAGE: .+?\])', report_draft)
+    for part in parts:
+        if not part.strip():
+            continue
+        
+        match = re.match(r'\[IMAGE: (image_\d+)\]', part)
+        if match:
+            placeholder_id = match.group(1)
+            image_path = rag_engine.path_to_placeholder_map.get(placeholder_id)
+            
+            if image_path and os.path.exists(image_path):
+                image_caption = f"[bold]引用资料:[/bold] [cyan]`{image_path}`[/cyan]"
+                report_table.add_row(image_caption)
+                display_image_in_terminal(image_path, max_width=80)
+                report_table.add_row("")
+            else:
+                error_msg = f"[bold red]错误：报告引用了图片 '{placeholder_id}'，但未找到其路径 '{image_path}'。[/bold red]"
+                report_table.add_row(error_msg)
+        else:
+            report_table.add_row(Markdown(part.strip()))
+    return report_table
+
+def display_rag_answer(question: str, answer_draft: str, rag_engine: RAGEngine, image_path: str = None):
+    """
+    打印 RAG 问答结果。
+    """
     console = Console()
     console.print()
 
     if image_path:
-        query_display = f"[bold]Image Query:[/bold] {image_path}"
+        query_display = f"[bold]Image Query:[/bold] {image_path}\n[bold]Q:[/bold] {question or '无附加问题'}"
     else:
         query_display = f"[bold]Q:[/bold] {question}"
-
+    
     question_panel = Panel(
         query_display,
         title="[bold yellow]您的查询[/bold yellow]",
         border_style="yellow",
         expand=False
     )
+    console.print(question_panel)
     
-    answer_markdown = Markdown(answer)
+    report_content_table = render_rich_report(rag_engine, answer_draft)
+
     answer_panel = Panel(
-        answer_markdown,
+        report_content_table,
         title="[bold green]AI的回答[/bold green]",
         border_style="green",
         expand=False
     )
-    
-    console.print(question_panel)
     console.print(answer_panel)
     console.print()

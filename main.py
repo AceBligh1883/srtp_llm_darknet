@@ -71,19 +71,20 @@ def handle_rag(args: argparse.Namespace):
     if not (args.ask or args.query_image):
         return
 
-    rag_engine = RAGEngine()
     question = args.ask
     image_path = args.query_image
-    answer = ""
 
+    if not (question or image_path):
+        return
+
+    rag_engine = RAGEngine()
+    answer_draft = ""
     from rich.console import Console 
-    with Console().status("[bold cyan]AI正在思考中...[/bold cyan]", spinner="dots"):
-        if image_path:
-            answer = rag_engine.ask_with_image(image_path, question)
-        elif question:
-            answer = rag_engine.ask(question)
+    console = Console()
+    with console.status("[bold cyan]AI正在思考中...[/bold cyan]", spinner="dots"):
+        answer_draft = rag_engine.ask(question, image_path=image_path)
     
-    display_rag_answer(question, answer, image_path)
+    display_rag_answer(question, answer_draft, rag_engine, image_path) 
 
 def handle_kg_build(args: argparse.Namespace):
     """处理知识图谱构建命令。"""

@@ -2,6 +2,7 @@
 
 import base64
 import io
+from typing import List, Union
 import requests
 import json
 from src.common import config
@@ -30,7 +31,7 @@ class GeminiClient:
         pil_image.save(buffered, format="JPEG")
         return base64.b64encode(buffered.getvalue()).decode('utf-8')
     
-    def generate(self, prompt: str, pil_image: Image.Image = None) -> str:
+    def generate(self, prompt: str, pil_image: Union[Image.Image, List[Image.Image]] = None) -> str:
         """
         向代理API发送一个prompt，并获取模型生成的文本内容。
 
@@ -44,38 +45,27 @@ class GeminiClient:
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}"
         }
-        messages = []
-        if pil_image:
-            base64_image = self._image_to_base64(pil_image)
-            content = [
-                {"type": "text", "text": prompt},
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/jpeg;base64,{base64_image}"
-                    }
-                }
-            ]
-            messages.append({"role": "user", "content": content})
+        content_parts = [{"type": "text", "text": prompt}]
         
-        else:
-            messages.append({"role": "user", "content": prompt})
-
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "temperature": 0.3,
-            "stream": False 
-        }
-
-        logger.debug(f"正在向Gemini代理发送请求，使用模型: {self.model}")
+        if pil_image:
+            images_to_process = pil_image if isinstance(pil_image, list) else [pil_image]
+            for img in images_to_process:
+                if isinstance(img, Image.Image):
+                    base64_image = self._image_to_base64(img)
+                    content_parts.append({
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}
+                    })
+        
+        messages = [{"role": "user", "content": content_parts}]
+        payload = {"model": self.model, "messages": messages, "temperature": 0.3, "stream": False}
 
         try:
             response = requests.post(
                 self.api_url,
                 headers=headers,
                 data=json.dumps(payload),
-                timeout=180  
+                timeout=300 
             )
 
             response.raise_for_status()
@@ -86,7 +76,7 @@ class GeminiClient:
                 logger.info("已成功从Gemini代理接收到响应。")
                 return answer.strip()
             else:
-                logger.error(f"从Gemini代理收到的响应结构无效: {response_data}")
+                logger.error(f"从代理收到的响应结构无效: {response_data}")
                 return "抱歉，从API收到的响应格式不正确。"
 
         except requests.exceptions.RequestException as e:
