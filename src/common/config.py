@@ -1,3 +1,4 @@
+# src/common/config.py
 """
 项目统一配置文件。
 """

@@ -2,11 +2,9 @@
 """
 爬虫工作器，负责执行爬取任务的核心逻辑
 """
-import asyncio
 from bs4 import BeautifulSoup
 import redis
 import json
-
 from src.common import config
 from src.common.logger import logger
 from src.crawler.client import HttpClient

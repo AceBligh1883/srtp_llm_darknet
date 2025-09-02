@@ -8,8 +8,9 @@ import json
 from src.common import config
 from src.common.logger import logger
 from PIL import Image
+from src.clients.llm_client import LLMClient
 
-class GeminiClient:
+class GeminiClient(LLMClient):
     """
     通过兼容OpenAI格式的代理API调用Gemini模型的客户端。
     """

@@ -1,4 +1,4 @@
-# src/common/url_processor.py
+# src/crawler/url_processor.py
 """
 URL处理工具模块
 """

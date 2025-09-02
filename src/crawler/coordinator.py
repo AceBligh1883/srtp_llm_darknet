@@ -8,7 +8,7 @@ from typing import List, Dict, Optional
 
 from src.common import config
 from src.common.logger import logger
-from src.common.url_processor import URLProcessor
+from src.crawler.url_processor import URLProcessor
 
 class Coordinator:
     """任务协调器，负责初始化和管理任务队列"""

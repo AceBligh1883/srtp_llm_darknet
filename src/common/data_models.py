@@ -3,7 +3,7 @@
 项目中统一使用的数据模型
 """
 from dataclasses import dataclass
-from typing import Optional
+from typing import Dict, List, Optional
 
 @dataclass
 class ContentMeta:
@@ -24,3 +24,14 @@ class SearchResult:
     doc_id: int
     score: float
     metadata: ContentMeta
+
+@dataclass
+class RAGReport:
+    """
+    RAG流程的数据容器。
+    """
+    question: Optional[str]
+    query_image_path: Optional[str]
+    body: str  
+    evidence: List[SearchResult] 
+    image_references: Dict[str, str]

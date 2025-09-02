@@ -7,11 +7,12 @@ from src.crawler.coordinator import Coordinator
 from src.crawler.worker import Worker
 from src.common import config
 from src.common.logger import logger
-from src.pipeline.processing import ProcessingPipeline
+from src.pipeline.indexing_pipeline import IndexingPipeline 
 from src.pipeline.kg_pipeline import run_kg_construction_pipeline
 from src.search.engine import SearchEngine
 from src.search.rag_engine import RAGEngine
-from src.ui.display import display_search_results, display_rag_answer
+from src.ui.display import display_search_results
+from src.ui.presenter import Presenter
 
 def setup_dirs():
     """确保所有必要的输入数据目录存在"""
@@ -45,7 +46,7 @@ def handle_process(args: argparse.Namespace):
     if not (args.process_text or args.process_image or args.process_all):
         return
 
-    pipeline = ProcessingPipeline()
+    pipeline = IndexingPipeline()
     if args.process_text or args.process_all:
         pipeline.process_directory(config.TEXT_DIR, 'text')
     if args.process_image or args.process_all:
@@ -78,13 +79,11 @@ def handle_rag(args: argparse.Namespace):
         return
 
     rag_engine = RAGEngine()
-    answer_draft = ""
-    from rich.console import Console 
-    console = Console()
-    with console.status("[bold cyan]AI正在思考中...[/bold cyan]", spinner="dots"):
-        answer_draft = rag_engine.ask(question, image_path=image_path)
+    presenter = Presenter()
+    with presenter.console.status("[bold cyan]AI正在思考中...[/bold cyan]", spinner="dots"):
+        report = rag_engine.ask(question, image_path=image_path)
     
-    display_rag_answer(question, answer_draft, rag_engine, image_path) 
+    presenter.display_rag_report(report)
 
 def handle_kg_build(args: argparse.Namespace):
     """处理知识图谱构建命令。"""

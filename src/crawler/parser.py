@@ -4,8 +4,7 @@ HTML解析与链接提取模块
 """
 from bs4 import BeautifulSoup
 from typing import Set
-
-from src.common.url_processor import URLProcessor
+from src.crawler.url_processor import URLProcessor
 
 class Parser:
     """从HTML中提取链接"""

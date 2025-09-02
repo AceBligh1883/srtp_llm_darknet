@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 
 from src.common import config
 from src.common.logger import logger
-from src.common.url_processor import URLProcessor
+from src.crawler.url_processor import URLProcessor
 
 class ContentSaver:
     """将抓取到的内容保存到统一的输入目录"""
