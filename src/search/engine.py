@@ -2,7 +2,6 @@
 """
 统一的检索引擎
 """
-import os
 from typing import List
 from src.common import config
 from src.common.logger import logger
@@ -12,7 +11,6 @@ from src.storage.index import IndexManager
 from src.services.embedding_service import EmbeddingService
 from src.processing.text_processor import TextProcessor
 from src.processing.image_processor import ImageProcessor
-from src.processing.translator import translate_to_english
 
 class SearchEngine:
     """
@@ -29,9 +27,8 @@ class SearchEngine:
 
     def search_by_text(self, query: str, top_k: int = 10) -> List[SearchResult]:
         """通过文本查询进行向量搜索"""
-        logger.info(f"执行文本搜索: '{query[:50]}...'")
-        translated_query = translate_to_english(query)
-        processed_query = self.text_processor.process(translated_query)
+        logger.info(f"执行文本搜索: '{query[:50]}'")
+        processed_query = self.text_processor.process(query)
         query_vectors = self.embedding_service.get_text_embeddings([processed_query])
 
         if not query_vectors:
@@ -70,3 +67,13 @@ class SearchEngine:
         combined_results = text_results + image_results
         combined_results.sort(key=lambda x: x.score, reverse=True)
         return combined_results
+
+    def search_by_vector(self, vector: List[float], top_k: int) -> List[SearchResult]:
+        """使用向量进行多模态搜索。"""
+        logger.debug(f"执行向量搜索...")
+        image_results = self.index_manager.vector_search(vector, top_k, content_type_filter='image')
+        text_results = self.index_manager.vector_search(vector, top_k, content_type_filter='text')
+        
+        combined_results = text_results + image_results
+        combined_results.sort(key=lambda x: x.score, reverse=True)
+        return combined_results[:top_k]

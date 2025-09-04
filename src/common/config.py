@@ -42,9 +42,9 @@ VECTOR_DIM: int = 768
 RERANKER_MODEL: str = "BAAI/bge-reranker-v2-m3"
 
 # LLM (用于RAG)
-RAG_TOP_K: int = 10
-DEFAULT_MODEL: str = "gemini-2.5-pro"
-
+RAG_TOP_K: int = 20
+DEFAULT_MODEL: str = "gemini-2.5-flash-free"
+LLM_API_CALL_INTERVAL: float = 20.0 
 # 性能与并发配置
 MAX_TOKENS_PER_BATCH: int = 65536
 MIN_TEXT_LENGTH: int = 100

@@ -1,31 +1,41 @@
 # src/pipeline/rag_pipeline.py
-from typing import List, Set, Dict, Tuple
+from typing import List, Dict, Tuple
 from src.common import prompts
 from src.common.logger import logger
 from src.common.data_models import SearchResult
 from src.services.content_enhancer import ContentEnhancer
 from src.search.engine import SearchEngine
+from src.processing.image_processor import ImageProcessor
 from src.services.reranker_service import RerankerService
+from src.services.embedding_service import EmbeddingService
+from src.services.image_ranker_service import ImageRankerService
 
 class QueryUnderstandingStage:
     """理解用户查询"""
     def __init__(self, content_enhancer: ContentEnhancer):
         self.enhancer = content_enhancer
+        self.embedding_service = EmbeddingService()
 
     def run(self, question: str, image_path: str = None) -> Dict:
         queries = {question} if question else set()
-        analysis_result = {"main_image_desc": "", "final_llm_images": []}
+        analysis_result = {"main_image_desc": "", "final_llm_images": [], "query_image_vector": None}
         master_query_text = question
 
         if image_path:
             logger.info(f"正在分析查询图片 '{image_path}'")
             try:
                 analysis = self.enhancer.analyze_query_image(image_path)
+                pil_image = analysis["pil_image"]
+
                 queries.update(analysis["keywords"])
                 queries.add(analysis["description"])
                 analysis_result["main_image_desc"] = analysis["description"]
                 analysis_result["final_llm_images"].append(analysis["pil_image"])
                 analysis_result["main_query_image_path"] = image_path
+
+                image_vectors = self.embedding_service.get_image_embeddings([pil_image])
+                if image_vectors:
+                    analysis_result["query_image_vector"] = image_vectors[0]
 
                 if not master_query_text:
                     master_query_text = analysis["description"]
@@ -42,52 +52,79 @@ class RetrievalStage:
     """从索引中召回候选文档"""
     def __init__(self, search_engine: SearchEngine):
         self.engine = search_engine
+        
+    def run(self, query_analysis: Dict) -> List[SearchResult]:
+        text_queries = query_analysis["queries"]
+        image_vector = query_analysis["query_image_vector"]
 
-    def run(self, queries: Set[str]) -> List[SearchResult]:
-        logger.info(f"正在从 {len(queries)} 个查询中检索文档...")
-        all_results = [res for query in queries for res in self.engine.search_by_text(query)]
-        unique_results = list({res.doc_id: res for res in all_results}.values())
-        if not unique_results:
+        all_results = []
+        if text_queries:
+            logger.info(f"正在执行 {len(text_queries)} 个文本查询...")
+            for query in text_queries:
+                all_results.extend(self.engine.search_by_text(query))
+        
+        if image_vector is not None:
+            logger.info(f"正在执行原始图片向量查询...")
+            all_results.extend(self.engine.search_by_vector(image_vector, top_k=20))
+        
+        if not all_results:
             raise RuntimeError("数据库中找不到与您查询相关的任何文档。")
+        
+        unique_results = list({res.doc_id: res for res in all_results}.values())
+        unique_results.sort(key=lambda x: x.score, reverse=True)
         return unique_results
 
 class RankingStage:
     """对召回的文档进行重排序"""
     def __init__(self, content_enhancer: ContentEnhancer, reranker: RerankerService):
         self.enhancer = content_enhancer
-        self.reranker = reranker
+        self.text_reranker = reranker
+        self.image_ranker = ImageRankerService()
 
-    def run(self, queries: str, initial_results: List[SearchResult]) -> Tuple[List[SearchResult], Dict[str, str]]:
-        logger.info("正在为重排序准备内容...")
-        image_paths = [r.metadata.file_path for r in initial_results if r.metadata.content_type == 'image']
-        descriptions = self.enhancer.describe_images_batch(image_paths)
+    def run(self, query_analysis: dict, initial_results: List[SearchResult]) -> Tuple[List[SearchResult], Dict[str, str]]:
+        master_query = query_analysis["master_query_text"]
+        query_image_vector = query_analysis.get("query_image_vector")
 
-        def get_content(result: SearchResult) -> str:
-            if result.metadata.content_type == 'image':
-                return descriptions.get(result.metadata.file_path, "")
+        text_results = [r for r in initial_results if r.metadata.content_type == 'text']
+        image_results = [r for r in initial_results if r.metadata.content_type == 'image']
+
+        top_image_results = self.image_ranker.rank_images(
+            master_query, query_image_vector, image_results
+        )
+
+        def get_text_content(result: SearchResult) -> str:
             try:
                 with open(result.metadata.file_path, 'r', encoding='utf-8', errors='ignore') as f:
                     return f.read(8192)
             except Exception:
                 return ""
+            
+        text_rerank_data = ((res, get_text_content(res)) for res in text_results)
+        top_text_results = self.text_reranker.rerank(master_query, text_rerank_data)
+
+        image_paths_to_describe = [r.metadata.file_path for r in top_image_results]
+        descriptions = self.enhancer.describe_images_batch(image_paths_to_describe)
         
-        rerank_data = ((res, get_content(res)) for res in initial_results)
-        ranked_results = self.reranker.rerank(queries, rerank_data)
-        return ranked_results, descriptions
+        final_candidates = top_text_results + top_image_results
+        final_candidates.sort(key=lambda x: x.score, reverse=True)
+        return final_candidates, descriptions
 
 class SynthesisStage:
     """构建上下文并生成最终报告"""
     def __init__(self, llm_client):
         self.llm_client = llm_client
+        self.image_processor = ImageProcessor()
 
     def run(self, question: str, evidence: List[SearchResult], descriptions: Dict[str, str], query_analysis: Dict) -> Tuple[str, Dict]:
         logger.info(f"正在使用 {len(evidence)} 份证据构建最终上下文...")
         path_map = {}
         contexts = []
+        final_llm_images = []
         image_counter = 1
 
         if "main_query_image_path" in query_analysis:
             path_map["main_query_image"] = query_analysis["main_query_image_path"]
+            final_llm_images.extend(query_analysis["final_llm_images"])
 
         for result in evidence:
             path = result.metadata.file_path
@@ -99,11 +136,15 @@ class SynthesisStage:
                 image_counter += 1
                 path_map[placeholder] = path
                 contexts.append(f"Source: 图片 (标识符: {placeholder})\nContent:\n{descriptions.get(path, '[描述不可用]')}")
+
+                pil_image = self.image_processor.process(path)
+                if pil_image:
+                        final_llm_images.append(pil_image)
         
         if not contexts:
             raise RuntimeError("找到相关文档，但无法构建上下文生成答案。")
 
-        prompt_template = prompts.MULTIMODAL_RAG_PROMPT if query_analysis["final_llm_images"] else prompts.RAG_PROMPT
+        prompt_template = prompts.MULTIMODAL_RAG_PROMPT if final_llm_images else prompts.RAG_PROMPT
         prompt = prompt_template.format(
             context="\n\n---\n\n".join(contexts),
             question=question or "基于提供的图片和资料进行综合分析。",
@@ -111,6 +152,6 @@ class SynthesisStage:
         )
         
         logger.info("正在生成最终报告...")
-        report_body = self.llm_client.generate(prompt, pil_image=query_analysis["final_llm_images"])
+        report_body = self.llm_client.generate(prompt, pil_image=final_llm_images)
         
         return report_body, path_map

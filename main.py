@@ -11,8 +11,7 @@ from src.pipeline.indexing_pipeline import IndexingPipeline
 from src.pipeline.kg_pipeline import run_kg_construction_pipeline
 from src.search.engine import SearchEngine
 from src.search.rag_engine import RAGEngine
-from src.ui.display import display_search_results
-from src.ui.presenter import Presenter
+from src.ui.presenter import Presenter 
 
 def setup_dirs():
     """确保所有必要的输入数据目录存在"""
@@ -65,7 +64,8 @@ def handle_search(args: argparse.Namespace):
     elif args.search_image:
         results = engine.search_by_image(args.search_image, args.limit)
 
-    display_search_results(results, query_term)
+    presenter = Presenter()
+    presenter.display_search_results(results, args.search)
 
 def handle_rag(args: argparse.Namespace):
     """处理RAG问答命令"""

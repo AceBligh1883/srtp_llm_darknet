@@ -2,7 +2,6 @@
 """
 只负责Elasticsearch操作的模块
 """
-import os
 from typing import List
 import numpy as np
 from elasticsearch import Elasticsearch

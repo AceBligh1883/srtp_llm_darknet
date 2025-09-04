@@ -1,5 +1,5 @@
 # src/services/reranker_service.py
-from sentence_transformers import CrossEncoder
+from FlagEmbedding import FlagReranker
 from typing import Iterable, List, Tuple
 import torch
 from src.common.data_models import SearchResult
@@ -10,7 +10,7 @@ class RerankerService:
         logger.debug(f"正在加载Rerank模型: {model_name}...")
         try:
             device='cuda' if torch.cuda.is_available() else 'cpu'
-            self.model = CrossEncoder(model_name, max_length=512, device=device)
+            self.reranker = FlagReranker(model_name, use_fp16=True, device=device)
             logger.debug("Rerank模型加载成功。")
         except Exception as e:
             logger.error(f"加载Rerank模型失败: {e}", exc_info=True)
@@ -33,9 +33,9 @@ class RerankerService:
         original_results = [item[0] for item in results]
         contents_to_rank = [item[1] for item in results]
 
-        sentence_pairs = [(query, content) for content in contents_to_rank]
+        sentence_pairs = [[query, content] for content in contents_to_rank]
         logger.info(f"正在对 {len(original_results)} 个结果进行重排序...")
-        scores = self.model.predict(sentence_pairs, show_progress_bar=False, batch_size=32).tolist()
+        scores = self.reranker.compute_score(sentence_pairs, normalize=True)
         for i, res in enumerate(original_results):
             res.score = float(scores[i])
         original_results.sort(key=lambda x: x.score, reverse=True)

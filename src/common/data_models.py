@@ -32,6 +32,6 @@ class RAGReport:
     """
     question: Optional[str]
     query_image_path: Optional[str]
-    body: str  
+    answer: str  
     evidence: List[SearchResult] 
     image_references: Dict[str, str]

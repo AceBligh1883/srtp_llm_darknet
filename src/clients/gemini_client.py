@@ -9,6 +9,7 @@ from src.common import config
 from src.common.logger import logger
 from PIL import Image
 from src.clients.llm_client import LLMClient
+from src.common.rate_limiter import rate_limited, format_exception_detail
 
 class GeminiClient(LLMClient):
     """
@@ -32,6 +33,7 @@ class GeminiClient(LLMClient):
         pil_image.save(buffered, format="JPEG")
         return base64.b64encode(buffered.getvalue()).decode('utf-8')
     
+    @rate_limited(config.LLM_API_CALL_INTERVAL)
     def generate(self, prompt: str, pil_image: Union[Image.Image, List[Image.Image]] = None) -> str:
         """
         向代理API发送一个prompt，并获取模型生成的文本内容。
@@ -66,7 +68,7 @@ class GeminiClient(LLMClient):
                 self.api_url,
                 headers=headers,
                 data=json.dumps(payload),
-                timeout=300 
+                timeout=(10, 180)
             )
 
             response.raise_for_status()
@@ -81,9 +83,10 @@ class GeminiClient(LLMClient):
                 return "抱歉，从API收到的响应格式不正确。"
 
         except requests.exceptions.RequestException as e:
-            logger.error(f"调用Gemini API时发生错误: {e}")
-            return f"抱歉，调用API时发生网络错误: {e}"
+            detailed_error = format_exception_detail(e)
+            logger.error(f"调用Gemini API时发生网络错误: {detailed_error}")
+            return f"抱歉，调用API时发生网络错误，详情: {e.args}"
         except Exception as e:
-            logger.error(f"发生未知错误: {e}")
+            logger.error(f"处理API响应时发生未知错误: {type(e).__name__} - {e}", exc_info=True)
             return f"抱歉，处理API响应时发生未知错误。"
 
