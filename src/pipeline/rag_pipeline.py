@@ -121,8 +121,9 @@ class SynthesisStage:
         contexts = []
         final_llm_images = []
         image_counter = 1
-
-        if "main_query_image_path" in query_analysis:
+        
+        has_main_query_image = "main_query_image_path" in query_analysis
+        if has_main_query_image:
             path_map["main_query_image"] = query_analysis["main_query_image_path"]
             final_llm_images.extend(query_analysis["final_llm_images"])
 
@@ -139,17 +140,24 @@ class SynthesisStage:
 
                 pil_image = self.image_processor.process(path)
                 if pil_image:
-                        final_llm_images.append(pil_image)
+                    final_llm_images.append(pil_image)
         
         if not contexts:
             raise RuntimeError("找到相关文档，但无法构建上下文生成答案。")
 
-        prompt_template = prompts.MULTIMODAL_RAG_PROMPT if final_llm_images else prompts.RAG_PROMPT
-        prompt = prompt_template.format(
-            context="\n\n---\n\n".join(contexts),
-            question=question or "基于提供的图片和资料进行综合分析。",
-            main_image_description=query_analysis["main_image_desc"]
-        )
+        if has_main_query_image:
+            prompt_template = prompts.MULTIMODAL_RAG_PROMPT
+            prompt = prompt_template.format(
+                context=contexts,
+                question=question or "基于提供的图文资料进行综合分析。",
+                main_image_description=query_analysis.get("main_image_desc", "N/A")
+            )
+        else:
+            prompt_template = prompts.RAG_PROMPT
+            prompt = prompt_template.format(
+                context=contexts,
+                question=question
+            )
         
         logger.info("正在生成最终报告...")
         report_body = self.llm_client.generate(prompt, pil_image=final_llm_images)

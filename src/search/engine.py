@@ -11,6 +11,7 @@ from src.storage.index import IndexManager
 from src.services.embedding_service import EmbeddingService
 from src.processing.text_processor import TextProcessor
 from src.processing.image_processor import ImageProcessor
+from src.processing.translator import translate_to_english
 
 class SearchEngine:
     """
@@ -28,7 +29,7 @@ class SearchEngine:
     def search_by_text(self, query: str, top_k: int = 10) -> List[SearchResult]:
         """通过文本查询进行向量搜索"""
         logger.info(f"执行文本搜索: '{query[:50]}'")
-        processed_query = self.text_processor.process(query)
+        processed_query = self.text_processor.process(translate_to_english(query))
         query_vectors = self.embedding_service.get_text_embeddings([processed_query])
 
         if not query_vectors:

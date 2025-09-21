@@ -2,6 +2,7 @@
 from FlagEmbedding import FlagReranker
 from typing import Iterable, List, Tuple
 import torch
+from src.common import config
 from src.common.data_models import SearchResult
 from src.common.logger import logger
 
@@ -39,5 +40,5 @@ class RerankerService:
         for i, res in enumerate(original_results):
             res.score = float(scores[i])
         original_results.sort(key=lambda x: x.score, reverse=True)
-        return original_results
+        return original_results[:config.RAG_TOP_K]
 

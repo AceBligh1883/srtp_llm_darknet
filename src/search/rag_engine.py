@@ -35,15 +35,12 @@ class RAGEngine:
             initial_results = self.retrieval_stage.run(query_analysis)
             ranked_results, descriptions = self.ranking_stage.run(query_analysis, initial_results)
             
-            top_k = config.RAG_TOP_K
-            final_evidence = ranked_results[:top_k]
-            
-            report_body, path_map = self.synthesis_stage.run(question, final_evidence, descriptions, query_analysis)
+            report_body, path_map = self.synthesis_stage.run(question, ranked_results, descriptions, query_analysis)
             return RAGReport(
                 question=question,
                 query_image_path=image_path,
                 answer=report_body,
-                evidence=final_evidence,
+                evidence=ranked_results,
                 image_references=path_map
             )
         
