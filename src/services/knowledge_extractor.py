@@ -13,35 +13,61 @@ class KnowledgeExtractor:
     def __init__(self):
         self.llm_client = get_llm_client()
 
-    def extract(self, text_content: str, doc_id: str) -> List[Dict]:
+    def extract_from_documents(self, documents: List[Dict[str, str]]) -> Dict[str, List[Dict]]:
         """
-        从文本中提取三元组。
+        LLM的响应中解析出三元组列表。
         """
-        if not text_content or not text_content.strip():
-            return []
-
+        if not documents:
+            return {}
+        is_batch = len(documents) > 1
+        doc_ids = [doc['doc_id'] for doc in documents]
+        if is_batch:
+            content_parts = []
+            for doc in documents:
+                part = f"--- DOCUMENT START: {doc['doc_id']} ---\n{doc['content']}\n--- DOCUMENT END: {doc['doc_id']} ---"
+                content_parts.append(part)
+            text_content = "\n\n".join(content_parts)
+        else:
+            text_content = documents[0]['content']
+            
         prompt = prompts.KNOWLEDGE_EXTRACTION_PROMPT.format(
-            entity_schema=json.dumps(schema.ENTITY_TYPES, indent=2),
+            entity_schema=json.dumps(schema.ENTITY_TYPES, indent=2, ensure_ascii=False),
             relation_schema=", ".join(schema.RELATION_TYPES),
             text_content=text_content
         )
-        
-        response_str = self.llm_client.generate(prompt)
-        
+        response_text = self.llm_client.generate(prompt)
         try:
-            match = re.search(r'\[.*\]', response_str, re.DOTALL)
-            if not match:
-                logger.warning(f"在文档 {doc_id} 的LLM响应中未找到列表格式。")
-                return []
-            
-            triples = json.loads(match.group(0))
-            
-            if isinstance(triples, list) and all('head' in t and 'relation' in t and 'tail' in t for t in triples):
-                logger.info(f"成功从文档 {doc_id} 中提取 {len(triples)} 个三元组。")
-                return triples
+            if is_batch:
+                match = re.search(r'\{.*\}', response_text, re.DOTALL)
+                if not match:
+                    logger.error(f"批处理响应中未找到JSON对象。Doc IDs: {doc_ids}")
+                    return {doc_id: [] for doc_id in doc_ids}
+                
+                all_results = json.loads(match.group(0))
+                if isinstance(all_results, dict):
+                    for doc_id in doc_ids:
+                        if doc_id not in all_results:
+                            all_results[doc_id] = []
+                    return all_results
+                else:
+                    logger.error(f"批处理响应不是一个字典。Doc IDs: {doc_ids}")
+                    return {doc_id: [] for doc_id in doc_ids}
             else:
-                logger.warning(f"文档 {doc_id} 提取的三元组格式不正确。")
-                return []
+                match = re.search(r'\[.*\]', response_text, re.DOTALL)
+                if not match:
+                    logger.warning(f"单文档响应中未找到列表格式。Doc ID: {doc_ids[0]}")
+                    return {doc_ids[0]: []}
+                
+                triples = json.loads(match.group(0))
+                if isinstance(triples, list):
+                    return {doc_ids[0]: triples}
+                else:
+                    logger.warning(f"单文档响应不是一个列表。Doc ID: {doc_ids[0]}")
+                    return {doc_ids[0]: []}
+        
         except json.JSONDecodeError:
-            logger.error(f"解析文档 {doc_id} 的三元组JSON失败。响应: {response_str[:200]}...")
-            return []
+            logger.error(f"解析JSON响应失败。Doc IDs: {doc_ids}。响应预览: {response_text[:300]}...")
+            return {doc_id: [] for doc_id in doc_ids}
+
+        
+    

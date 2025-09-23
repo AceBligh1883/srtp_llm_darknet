@@ -33,7 +33,7 @@ class GeminiClient(LLMClient):
         pil_image.save(buffered, format="JPEG")
         return base64.b64encode(buffered.getvalue()).decode('utf-8')
     
-    @rate_limited(config.LLM_API_CALL_INTERVAL)
+    #@rate_limited(config.LLM_API_CALL_INTERVAL)
     def generate(self, prompt: str, pil_image: Union[Image.Image, List[Image.Image]] = None) -> str:
         """
         向代理API发送一个prompt，并获取模型生成的文本内容。

@@ -197,3 +197,18 @@ class DatabaseManager:
                     logger.debug(f"已将文件 '{os.path.basename(file_path)}' 标记为KG已处理。")
         except Exception as e:
             logger.error(f"标记文件 '{file_path}' 为KG已处理时失败: {e}")
+
+    def get_all_metadata(self) -> List[ContentMeta]:
+        """
+        从数据库中获取所有元数据记录。
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM content_meta")
+                records = [ContentMeta(**dict(row)) for row in cursor.fetchall()]
+                return records
+        except sqlite3.Error as e:
+            logger.error(f"获取所有元数据记录失败: {e}")
+            return []

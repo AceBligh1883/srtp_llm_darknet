@@ -52,6 +52,8 @@ MIN_TEXT_LENGTH: int = 100
 MAX_IMAGE_PIXELS: int = 2048 * 2048
 MAX_ITEMS_PER_BATCH = 32 
 
+# 知识图谱配置
+KG_BATCH_SIZE: int = 5
 # 存储与数据库配置
 ES_INDEX: str = "darknet_multimodal_index"
 ES_TIMEOUT: int = 30
