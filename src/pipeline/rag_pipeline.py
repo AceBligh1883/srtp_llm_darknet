@@ -115,8 +115,23 @@ class SynthesisStage:
         self.llm_client = llm_client
         self.image_processor = ImageProcessor()
 
-    def run(self, question: str, evidence: List[SearchResult], descriptions: Dict[str, str], query_analysis: Dict) -> Tuple[str, Dict]:
-        logger.info(f"正在使用 {len(evidence)} 份证据构建最终上下文...")
+    def _format_kg_facts(self, kg_facts: List[Dict]) -> str:
+        """将图谱事实格式化为自然语言。"""
+        if not kg_facts:
+            return "知识图谱中未发现与查询直接相关的结构化情报。\n"
+        
+        header = "--- 知识图谱情报摘要 ---\n根据结构化数据分析，发现以下关键关联：\n"
+        lines = [
+            f"- 实体 '{fact['head']}' ({fact['head_type']}) 与实体 '{fact['tail']}' ({fact['tail_type']}) 存在 '{fact['relation']}' 关系。"
+            for fact in kg_facts
+        ]
+        return header + "\n".join(lines) + "\n"
+    
+    def run(self, question: str, evidence: List[SearchResult], descriptions: Dict[str, str], query_analysis: Dict, kg_facts: List[Dict] = None) -> Tuple[str, Dict]:
+        logger.info(f"正在使用 {len(evidence)} 份证据和 {len(kg_facts or [])} 条图谱事实构建最终上下文...")
+        final_context = self._format_kg_facts(kg_facts)
+        final_context += "\n--- 相关非结构化情报 ---\n"
+        
         path_map = {}
         contexts = []
         final_llm_images = []
@@ -142,20 +157,22 @@ class SynthesisStage:
                 if pil_image:
                     final_llm_images.append(pil_image)
         
-        if not contexts:
-            raise RuntimeError("找到相关文档，但无法构建上下文生成答案。")
+        if not contexts and not kg_facts:
+            raise RuntimeError("找不到任何相关的结构化或非结构化信息。")
+
+        final_context += "\n\n".join(contexts)
 
         if has_main_query_image:
             prompt_template = prompts.MULTIMODAL_RAG_PROMPT
             prompt = prompt_template.format(
-                context=contexts,
+                context=final_context,
                 question=question or "基于提供的图文资料进行综合分析。",
                 main_image_description=query_analysis.get("main_image_desc", "N/A")
             )
         else:
             prompt_template = prompts.RAG_PROMPT
             prompt = prompt_template.format(
-                context=contexts,
+                context=final_context,
                 question=question
             )
         

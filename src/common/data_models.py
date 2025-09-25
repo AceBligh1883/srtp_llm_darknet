@@ -2,7 +2,7 @@
 """
 项目中统一使用的数据模型
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
 @dataclass
@@ -35,3 +35,4 @@ class RAGReport:
     answer: str  
     evidence: List[SearchResult] 
     image_references: Dict[str, str]
+    graph_facts: List[Dict] = field(default_factory=list)
