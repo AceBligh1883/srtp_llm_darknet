@@ -43,7 +43,7 @@ RERANKER_MODEL: str = "BAAI/bge-reranker-v2-m3"
 
 # LLM (用于RAG)
 RAG_TOP_K: int = 20
-DEFAULT_MODEL: str = "gemini-2.5-flash-free"
+DEFAULT_MODEL: str = "gemini-2.5-pro"
 LLM_API_CALL_INTERVAL: float = 20.0 
 # 性能与并发配置
 MAX_TOKENS_PER_BATCH: int = 65536
@@ -53,7 +53,7 @@ MAX_IMAGE_PIXELS: int = 2048 * 2048
 MAX_ITEMS_PER_BATCH = 32 
 
 # 知识图谱配置
-KG_BATCH_SIZE: int = 5
+KG_BATCH_SIZE: int = 3
 # 存储与数据库配置
 ES_INDEX: str = "darknet_multimodal_index"
 ES_TIMEOUT: int = 30

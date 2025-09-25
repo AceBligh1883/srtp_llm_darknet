@@ -34,7 +34,6 @@ class KnowledgeGraphEngine:
             
         with self.driver.session(database="neo4j") as session:
             session.execute_write(self._create_triples_tx, triples, source_doc_id)
-        logger.info(f"已将 {len(triples)} 个三元组（来源: {source_doc_id}）写入图谱。")
 
     @staticmethod
     def _create_triples_tx(tx, triples: List[Dict], source_doc_id: str):

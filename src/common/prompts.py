@@ -101,42 +101,53 @@ MULTIMODAL_RAG_PROMPT = """
     """
 
 KNOWLEDGE_EXTRACTION_PROMPT = """
-你是一个高度精确、支持批处理的知识提取引擎。
-你的任务是根据下面提供的Schema，从一个或多个文档中提取知识三元组。
+    你是一位顶尖的网络威胁情报分析师（Threat Intelligence Analyst），你的任务是从非结构化的暗网情报中，构建一个高度结构化的威胁情报知识图谱。你必须严格遵循下方提供的Schema进行分析和提取。
 
---- 【核心规则】 ---
-1.  **独立分析**: 必须独立分析每一个提供的文档。
-2.  **严格遵循Schema**: 提取的实体和关系必须严格来自下面定义的类型。
-3.  **精确的输出格式 (CRITICAL!)**:
-    *   **如果只提供了一个文档**: 你的输出必须是一个JSON列表 `[...]`，包含该文档的三元组。如果为空，则为 `[]`。
-    *   **如果提供了多个文档 (由分隔符 `--- DOCUMENT START: ...` 标识)**: 你的输出必须是一个单一的JSON对象 `{{...}}`，其中每个键是文档ID，值是该文档对应的三元组列表。
+    --- 【分析师准则 (Analyst's Codex)】 ---
+    1.  **Schema至上**: 你的唯一参考标准是下面【情报Schema定义】中的实体和关系类型。任何不符合该Schema的实体或关系都必须被忽略。
+    2.  **聚焦攻击链**: 优先提取能描绘出攻击活动链条的关系，例如：`[ORGANIZATION]` --`USES`--> `[MALWARE]` --`EXPLOITS`--> `[VULNERABILITY]` --`TARGETS`--> `[VICTIM_ORG]`。
+    3.  **实体即节点，关系即边**: 将每个识别出的实体视为图谱中的一个节点，将关系视为连接节点的有向边。确保你的三元组 `(head, relation, tail)` 逻辑上是通顺的。
+    4.  **尽可能详尽**: 识别并提取所有符合Schema的实体和关系。以具体的信息和数据为主，而非相关理论词汇。大约每个文档至少提取出5个三元组, 上不封顶。
+    5.  **避免常见网页网站**: 忽略任何与常见网站（如Google, Facebook, Twitter, YouTube, Whonix等）相关的实体或关系。 
 
---- 【实体类型定义】 ---
-{entity_schema}
+    --- 【技术指令 (Technical Directives)】 ---
+    1.  **独立分析**: 每一个由 `--- DOCUMENT START: ...` 标识的文档都是一份独立情报，必须单独分析。
+    2.  **精确的输出格式 (CRITICAL!)**:
+        *   **对于单份情报 (单个文档)**: 你的输出必须是一个JSON列表 `[...]`。如果无有效情报，则为 `[]`。
+        *   **对于多份情报 (多个文档)**: 你的输出必须是一个单一的JSON对象 `{{...}}`，其中键是情报ID（文档ID），值是该情报对应的三元组列表。每个三元组必须包含 "head", "head_type", "relation", "tail", "tail_type" 五个键。
 
---- 【关系类型定义】 ---
-{relation_schema}
+    --- 【情报Schema定义 (CRITICAL REFERENCE)】 ---
+    **实体类型 (Entity Types):**
+    你必须从以下列表中选择实体的类型。
+    ```json
+    {entity_schema}
+    ```
 
---- 【文本内容】 ---
-{text_content}
+    **关系类型 (Relation Types):**
+    你必须从以下列表中选择三元组的关系。
+    `{relation_schema}`
 
---- 【输出示例】 ---
-# 单文档输出示例:
-[
-    {{ 
-        "head": "Conti", "head_type": "ORGANIZATION",
-        "relation": "USES",
-        "tail": "TrickBot", "tail_type": "MALWARE"
+    --- 【待分析情报】 ---
+    {text_content}
+
+    --- 【输出示例】 ---
+    # 单文档输出示例:
+    [
+        {{ 
+            "head": "Conti", "head_type": "ORGANIZATION",
+            "relation": "USES",
+            "tail": "Cobalt Strike", "tail_type": "HACKING_TOOL"
+        }},
+        {{
+            "head": "Conti", "head_type": "ORGANIZATION",
+            "relation": "TARGETS",
+            "tail": "Healthcare", "tail_type": "VICTIM_INDUSTRY"
+        }}
+    ]
+
+    # 多文档输出示例:
+    {{
+        "doc1.txt": [ {{ "head": "APT29", "head_type": "ORGANIZATION", "relation": "EXPLOITS", "tail": "CVE-2021-44228", "tail_type": "VULNERABILITY" }} ],
+        "doc2.txt": []
     }}
-]
-
-# 多文档输出示例:
-{{
-    "doc1.txt": [ {{ "head": "Conti", ... }} ],
-    "doc2.txt": []
-}}
----
-
-提取的知识 (JSON格式):
 """
-

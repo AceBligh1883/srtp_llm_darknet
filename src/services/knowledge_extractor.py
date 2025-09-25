@@ -11,7 +11,7 @@ class KnowledgeExtractor:
     从文本内容中提取结构化的知识三元组。
     """
     def __init__(self):
-        self.llm_client = get_llm_client()
+        self.llm_client = get_llm_client("deepseek")
 
     def extract_from_documents(self, documents: List[Dict[str, str]]) -> Dict[str, List[Dict]]:
         """
